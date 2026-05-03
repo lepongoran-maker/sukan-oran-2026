@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { HouseColor, Gender, EventType, Participant, EventLimitsConfig, SystemConfig } from '../types';
+import { HouseColor, Gender, EventType, Participant, EventLimitsConfig, SystemConfig, StudentRosterEntry } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
 import { activeHouses, eventsForYear, getHouseUi } from '../utils/systemConfig';
 
 interface RegistrationFormProps {
   registrations: Record<string, Participant[]>; // Key: House_Year_Gender_EventId
+  studentRoster?: StudentRosterEntry[];
+  allowedHouse?: HouseColor;
   onUpdateRegistration: (key: string, participants: Participant[]) => void;
   eventLimits?: EventLimitsConfig;
   systemConfig?: SystemConfig;
 }
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUpdateRegistration, eventLimits, systemConfig = DEFAULT_SYSTEM_CONFIG }) => {
-  const houses = activeHouses(systemConfig);
-  const [selectedHouse, setSelectedHouse] = useState<HouseColor>(HouseColor.MERAH);
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, studentRoster = [], allowedHouse, onUpdateRegistration, eventLimits, systemConfig = DEFAULT_SYSTEM_CONFIG }) => {
+  const houses = activeHouses(systemConfig).filter(house => !allowedHouse || house.id === allowedHouse);
+  const [selectedHouse, setSelectedHouse] = useState<HouseColor>(allowedHouse || HouseColor.MERAH);
   const [selectedYear, setSelectedYear] = useState<number>(1);
   const [selectedGender, setSelectedGender] = useState<Gender>(Gender.LELAKI);
   const availableYears = React.useMemo(
@@ -23,10 +25,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
   );
 
   React.useEffect(() => {
+    if (allowedHouse) {
+      setSelectedHouse(allowedHouse);
+      return;
+    }
     if (!houses.some(house => house.id === selectedHouse)) {
       setSelectedHouse(houses[0]?.id || HouseColor.MERAH);
     }
-  }, [houses, selectedHouse]);
+  }, [allowedHouse, houses, selectedHouse]);
 
   React.useEffect(() => {
     if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
@@ -37,6 +43,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
   const unfilteredEvents = eventsForYear(systemConfig, selectedYear);
   const currentEvents = unfilteredEvents.filter(evt => evt.type !== EventType.KHUSUS);
   const houseConfig = getHouseUi(systemConfig, selectedHouse);
+  const rosterOptions = React.useMemo(() => {
+    return studentRoster
+      .filter(student => student.house === selectedHouse)
+      .filter(student => !student.year || student.year === selectedYear)
+      .filter(student => !student.gender || student.gender === selectedGender)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedGender, selectedHouse, selectedYear, studentRoster]);
 
   // Helper to generate unique key for storage
   const getKey = (eventId: string) => `${selectedHouse}_${selectedYear}_${selectedGender}_${eventId}`;
@@ -62,6 +75,42 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
     onUpdateRegistration(key, newParticipants);
   };
 
+  const getRosterOptionLabel = (student: StudentRosterEntry) =>
+    `${student.name} - ${student.className || 'Tiada kelas'}`;
+
+  const handleRosterSearchChange = (eventId: string, index: number, value: string) => {
+    if (!value) {
+      handleParticipantChange(eventId, index, 'name', '');
+      handleParticipantChange(eventId, index, 'className', '');
+      return;
+    }
+
+    const normalizedValue = value.trim().toLowerCase();
+    const selected = rosterOptions.find(student =>
+      getRosterOptionLabel(student).trim().toLowerCase() === normalizedValue ||
+      student.name.trim().toLowerCase() === normalizedValue
+    );
+    if (!selected) return;
+
+    const key = getKey(eventId);
+    const currentParticipants = registrations[key] || [];
+    const newParticipants = [...currentParticipants];
+    for (let i = 0; i <= index; i++) {
+      if (!newParticipants[i]) newParticipants[i] = { name: '', className: '' };
+    }
+    newParticipants[index] = { name: selected.name, className: selected.className };
+    onUpdateRegistration(key, newParticipants);
+  };
+
+  const getRosterSearchValue = (participant: Participant) => {
+    if (!participant?.name) return '';
+    const selected = rosterOptions.find(student =>
+      student.name.trim().toLowerCase() === participant.name.trim().toLowerCase() &&
+      student.className.trim().toLowerCase() === (participant.className || '').trim().toLowerCase()
+    );
+    return selected ? getRosterOptionLabel(selected) : '';
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-3 sm:p-6">
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -75,14 +124,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Pilih Rumah Sukan</label>
+              {allowedHouse && (
+                <div className="mb-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                  Akses guru dikunci kepada Rumah {getHouseUi(systemConfig, allowedHouse).name}.
+                </div>
+              )}
               <div className="flex space-x-2">
                 {houses.map(({ id: house }) => (
                   <button
                     key={house}
                     onClick={() => setSelectedHouse(house)}
+                    disabled={!!allowedHouse}
                     className={`w-10 h-10 rounded-full border-2 transition-transform hover:scale-110 ${
                       selectedHouse === house ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'border-transparent'
-                    } ${HOUSE_CONFIG[house].color}`}
+                    } ${HOUSE_CONFIG[house].color} ${allowedHouse ? 'cursor-not-allowed' : ''}`}
                     title={getHouseUi(systemConfig, house).name}
                   />
                 ))}
@@ -176,6 +231,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
                           <label className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">
                             {event.type === EventType.RELAY ? `Pelari ${index + 1}` : `Peserta ${index + 1}`}
                           </label>
+                          {rosterOptions.length > 0 && (
+                            <>
+                            <input
+                              key={`mobile-roster-${event.id}-${index}-${participant.name}-${participant.className}`}
+                              type="search"
+                              list={`mobile-roster-list-${event.id}-${index}`}
+                              defaultValue={getRosterSearchValue(participant)}
+                              placeholder="Taip / cari nama murid"
+                              onChange={(e) => handleRosterSearchChange(event.id, index, e.target.value)}
+                              className="mb-2 block w-full rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-semibold text-slate-800 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            />
+                            <datalist id={`mobile-roster-list-${event.id}-${index}`}>
+                              {rosterOptions.map((student, studentIndex) => (
+                                <option key={`${student.name}-${student.className}-${studentIndex}`} value={getRosterOptionLabel(student)} />
+                              ))}
+                            </datalist>
+                            </>
+                          )}
                           <input
                             type="text"
                             placeholder="Nama penuh peserta"
@@ -235,6 +308,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                                     {event.type === EventType.RELAY ? `Pelari ${index + 1}` : `Peserta ${index + 1}`}
                                   </label>
+                                  {rosterOptions.length > 0 && (
+                                    <>
+                                    <input
+                                      key={`desktop-roster-${event.id}-${index}-${participant.name}-${participant.className}`}
+                                      type="search"
+                                      list={`desktop-roster-list-${event.id}-${index}`}
+                                      defaultValue={getRosterSearchValue(participant)}
+                                      placeholder="Taip / cari murid"
+                                      onChange={(e) => handleRosterSearchChange(event.id, index, e.target.value)}
+                                      className="focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm text-xs border-blue-200 bg-blue-50 rounded-md p-1.5 border mb-1 font-semibold text-slate-700"
+                                    />
+                                    <datalist id={`desktop-roster-list-${event.id}-${index}`}>
+                                      {rosterOptions.map((student, studentIndex) => (
+                                        <option key={`${student.name}-${student.className}-${studentIndex}`} value={getRosterOptionLabel(student)} />
+                                      ))}
+                                    </datalist>
+                                    </>
+                                  )}
                                   <input
                                     type="text"
                                     placeholder="Nama"

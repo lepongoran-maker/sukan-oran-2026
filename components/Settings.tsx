@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, RotateCcw, Award, Users, Anchor, ClipboardList, Trophy, LayoutGrid, FileSpreadsheet, Trash2, Database, AlertTriangle, ShieldAlert, Download, Printer } from 'lucide-react';
-import { PointsConfig, Participant, WinnerProfile, HouseColor, Gender, EventLimitsConfig, EventType, HouseStats, SystemConfig, EventSettings } from '../types';
-import { POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI, HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
+import { Save, Settings as SettingsIcon, RotateCcw, Award, Users, Anchor, ClipboardList, Trophy, LayoutGrid, FileSpreadsheet, Trash2, Database, AlertTriangle, ShieldAlert, Download, Printer, KeyRound, LogOut } from 'lucide-react';
+import { AccessConfig, AccessSession, PointsConfig, Participant, WinnerProfile, HouseColor, Gender, EventLimitsConfig, EventType, HouseStats, SystemConfig, EventSettings, StudentRosterEntry } from '../types';
+import { POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI, HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG, DEFAULT_ACCESS_CONFIG } from '../constants';
 import { activeEvents, activeHouseIds, getHouseName, normalizeSystemConfig } from '../utils/systemConfig';
 import RegistrationForm from './RegistrationForm';
 import ResultsEntry from './ResultsEntry';
@@ -15,17 +15,23 @@ interface SettingsProps {
   onUpdateEventLimits: (config: EventLimitsConfig) => void;
   systemConfig: SystemConfig;
   onUpdateSystemConfig: (config: SystemConfig) => void;
+  accessConfig: AccessConfig;
+  onUpdateAccessConfig: (config: AccessConfig) => void;
+  accessSession: AccessSession;
+  onLogout: () => void;
   registrations: Record<string, Participant[]>;
   onUpdateRegistration: (key: string, participants: Participant[]) => void;
   onBulkRegistration: (newRegistrations: Record<string, Participant[]>) => void;
   onBulkOverride?: (newRegistrations: Record<string, Participant[]>) => void;
+  studentRoster: StudentRosterEntry[];
+  onImportStudentRoster: (newRoster: StudentRosterEntry[]) => void;
   results: Record<string, WinnerProfile[]>;
   onSaveResult: (eventId: string, year: number, gender: Gender, positions: WinnerProfile[]) => void;
   onResetData: (type: 'participants' | 'results' | 'all') => void;
   stats?: HouseStats[];
 }
 
-type AdminTab = 'registration' | 'import' | 'results_entry' | 'competition_form' | 'system_config' | 'config' | 'limits' | 'system' | 'backup';
+type AdminTab = 'registration' | 'import' | 'results_entry' | 'competition_form' | 'system_config' | 'config' | 'limits' | 'access' | 'system' | 'backup';
 
 // ── EXCEL EXPORT ──────────────────────────────────────────────────────────────
 function exportToExcel(
@@ -463,8 +469,8 @@ function exportToExcel(
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 const Settings: React.FC<SettingsProps> = ({
   pointsConfig, onUpdatePoints, eventLimits, onUpdateEventLimits,
-  systemConfig, onUpdateSystemConfig,
-  registrations, onUpdateRegistration, onBulkRegistration, onBulkOverride,
+  systemConfig, onUpdateSystemConfig, accessConfig, onUpdateAccessConfig, accessSession, onLogout,
+  registrations, onUpdateRegistration, onBulkRegistration, onBulkOverride, studentRoster, onImportStudentRoster,
   results, onSaveResult, onResetData, stats
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<AdminTab>('registration');
@@ -502,6 +508,29 @@ const Settings: React.FC<SettingsProps> = ({
   const [localSystemConfig, setLocalSystemConfig] = useState<SystemConfig>(normalizeSystemConfig(systemConfig));
   const [isSystemConfigSaved, setIsSystemConfigSaved] = useState(false);
   useEffect(() => { setLocalSystemConfig(normalizeSystemConfig(systemConfig)); }, [systemConfig]);
+
+  const [localAccessConfig, setLocalAccessConfig] = useState<AccessConfig>({
+    ...DEFAULT_ACCESS_CONFIG,
+    ...accessConfig,
+    housePasswords: { ...DEFAULT_ACCESS_CONFIG.housePasswords, ...(accessConfig.housePasswords || {}) },
+  });
+  const [isAccessConfigSaved, setIsAccessConfigSaved] = useState(false);
+  const isAdminSession = accessSession.role === 'admin';
+  const teacherHouse = accessSession.role === 'house_teacher' ? accessSession.house : undefined;
+
+  useEffect(() => {
+    setLocalAccessConfig({
+      ...DEFAULT_ACCESS_CONFIG,
+      ...accessConfig,
+      housePasswords: { ...DEFAULT_ACCESS_CONFIG.housePasswords, ...(accessConfig.housePasswords || {}) },
+    });
+  }, [accessConfig]);
+
+  useEffect(() => {
+    if (!isAdminSession && activeSubTab !== 'registration') {
+      setActiveSubTab('registration');
+    }
+  }, [activeSubTab, isAdminSession]);
 
   const handleScoringChange = (patch: Partial<NonNullable<SystemConfig['scoring']>>) => {
     setLocalSystemConfig(prev => ({
@@ -600,6 +629,32 @@ const Settings: React.FC<SettingsProps> = ({
       setLocalSystemConfig(DEFAULT_SYSTEM_CONFIG);
       onUpdateSystemConfig(DEFAULT_SYSTEM_CONFIG);
     }
+  };
+
+  const handleAdminPasswordChange = (password: string) => {
+    setLocalAccessConfig(prev => ({ ...prev, adminPassword: password }));
+    setIsAccessConfigSaved(false);
+  };
+
+  const handleHousePasswordChange = (house: HouseColor, password: string) => {
+    setLocalAccessConfig(prev => ({
+      ...prev,
+      housePasswords: {
+        ...prev.housePasswords,
+        [house]: password,
+      },
+    }));
+    setIsAccessConfigSaved(false);
+  };
+
+  const handleSaveAccessConfig = () => {
+    onUpdateAccessConfig({
+      ...localAccessConfig,
+      adminPassword: localAccessConfig.adminPassword.trim() || DEFAULT_ACCESS_CONFIG.adminPassword,
+      housePasswords: { ...DEFAULT_ACCESS_CONFIG.housePasswords, ...localAccessConfig.housePasswords },
+    });
+    setIsAccessConfigSaved(true);
+    setTimeout(() => setIsAccessConfigSaved(false), 2000);
   };
 
   const handleExport = () => {
@@ -813,8 +868,10 @@ const Settings: React.FC<SettingsProps> = ({
     { id:'system_config', icon:<SettingsIcon className="w-4 h-4"/>, label:'Rumah & Acara' },
     { id:'config', icon:<LayoutGrid className="w-4 h-4"/>, label:'Sistem Mata' },
     { id:'limits', icon:<ShieldAlert className="w-4 h-4"/>, label:'Had Acara Murid' },
+    { id:'access', icon:<KeyRound className="w-4 h-4"/>, label:'Akses Guru' },
   ];
-  const isSetupTab = setupTabs.some(tab => tab.id === activeSubTab);
+  const visibleSetupTabs = isAdminSession ? setupTabs : [];
+  const isSetupTab = visibleSetupTabs.some(tab => tab.id === activeSubTab);
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 min-h-screen">
@@ -825,33 +882,50 @@ const Settings: React.FC<SettingsProps> = ({
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden sticky top-24">
             <div className="p-4 bg-slate-900 text-white">
               <h2 className="text-lg font-bold flex items-center gap-2"><SettingsIcon className="w-5 h-5"/> Panel Admin</h2>
-              <p className="text-xs text-slate-400 mt-1">Pengurusan data & sistem</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {isAdminSession ? 'Pengurusan data & sistem' : `Guru Rumah ${teacherHouse ? getHouseName(systemConfig, teacherHouse) : ''}`}
+              </p>
             </div>
             <nav className="p-2 space-y-1">
-              <button onClick={()=>setActiveSubTab('system_config')}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${isSetupTab?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
-                <SettingsIcon className="w-5 h-5"/> Tetapan Sistem
-              </button>
-              <div className="h-px bg-gray-200 my-2 mx-4"/>
+              {isAdminSession && (
+                <>
+                  <button onClick={()=>setActiveSubTab('system_config')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${isSetupTab?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
+                    <SettingsIcon className="w-5 h-5"/> Tetapan Sistem
+                  </button>
+                  <div className="h-px bg-gray-200 my-2 mx-4"/>
+                </>
+              )}
               {[
-                { id:'registration', icon:<ClipboardList className="w-5 h-5"/>, label:'Pendaftaran (Manual)' },
-                { id:'import',       icon:<FileSpreadsheet className="w-5 h-5"/>, label:'Import CSV (Pukal)' },
-                { id:'results_entry',icon:<Trophy className="w-5 h-5"/>,        label:'Masuk Keputusan' },
-                { id:'competition_form',icon:<Printer className="w-5 h-5"/>,    label:'Borang Pertandingan' },
+                { id:'registration', icon:<ClipboardList className="w-5 h-5"/>, label:isAdminSession ? 'Pendaftaran (Manual)' : 'Daftar Rumah Saya' },
+                ...(isAdminSession ? [
+                  { id:'import',       icon:<FileSpreadsheet className="w-5 h-5"/>, label:'Import CSV (Pukal)' },
+                  { id:'results_entry',icon:<Trophy className="w-5 h-5"/>,        label:'Masuk Keputusan' },
+                  { id:'competition_form',icon:<Printer className="w-5 h-5"/>,    label:'Borang Pertandingan' },
+                ] : []),
               ].map(tab=>(
                 <button key={tab.id} onClick={()=>setActiveSubTab(tab.id as AdminTab)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab===tab.id?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
                   {tab.icon}{tab.label}
                 </button>
               ))}
+              {isAdminSession && (
+                <>
+                  <div className="h-px bg-gray-200 my-2 mx-4"/>
+                  <button onClick={()=>setActiveSubTab('backup')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab==='backup'?'bg-green-50 text-green-700':'text-gray-600 hover:bg-green-50 hover:text-green-600'}`}>
+                    <Download className="w-5 h-5"/> Backup Excel
+                  </button>
+                  <button onClick={()=>setActiveSubTab('system')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab==='system'?'bg-red-50 text-red-700':'text-gray-600 hover:bg-red-50 hover:text-red-600'}`}>
+                    <Database className="w-5 h-5"/> Pengurusan Data
+                  </button>
+                </>
+              )}
               <div className="h-px bg-gray-200 my-2 mx-4"/>
-              <button onClick={()=>setActiveSubTab('backup')}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab==='backup'?'bg-green-50 text-green-700':'text-gray-600 hover:bg-green-50 hover:text-green-600'}`}>
-                <Download className="w-5 h-5"/> Backup Excel
-              </button>
-              <button onClick={()=>setActiveSubTab('system')}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab==='system'?'bg-red-50 text-red-700':'text-gray-600 hover:bg-red-50 hover:text-red-600'}`}>
-                <Database className="w-5 h-5"/> Pengurusan Data
+              <button onClick={onLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg text-gray-600 transition-colors hover:bg-slate-100 hover:text-slate-900">
+                <LogOut className="w-5 h-5"/> Log Keluar
               </button>
             </nav>
           </div>
@@ -859,15 +933,15 @@ const Settings: React.FC<SettingsProps> = ({
 
         {/* Main Content */}
         <div className="flex-1">
-          {activeSubTab==='registration'  && <div className="animate-fadeIn"><RegistrationForm registrations={registrations} onUpdateRegistration={onUpdateRegistration} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
-          {activeSubTab==='import'        && <div className="animate-fadeIn"><CsvImport existingRegistrations={registrations} onBulkRegistration={onBulkRegistration} onBulkOverride={onBulkOverride} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
-          {activeSubTab==='results_entry' && <div className="animate-fadeIn"><ResultsEntry existingResults={results} registrations={registrations} onSaveResult={onSaveResult} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/></div>}
-          {activeSubTab==='competition_form' && <div className="animate-fadeIn"><CompetitionForm registrations={registrations} systemConfig={systemConfig}/></div>}
+          {activeSubTab==='registration'  && <div className="animate-fadeIn"><RegistrationForm registrations={registrations} studentRoster={studentRoster} allowedHouse={teacherHouse} onUpdateRegistration={onUpdateRegistration} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
+          {isAdminSession && activeSubTab==='import'        && <div className="animate-fadeIn"><CsvImport existingRegistrations={registrations} studentRoster={studentRoster} onImportStudentRoster={onImportStudentRoster} onBulkRegistration={onBulkRegistration} onBulkOverride={onBulkOverride} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
+          {isAdminSession && activeSubTab==='results_entry' && <div className="animate-fadeIn"><ResultsEntry existingResults={results} registrations={registrations} onSaveResult={onSaveResult} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/></div>}
+          {isAdminSession && activeSubTab==='competition_form' && <div className="animate-fadeIn"><CompetitionForm registrations={registrations} systemConfig={systemConfig}/></div>}
 
           {isSetupTab&&(
             <div className="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-2 animate-fadeIn">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {setupTabs.map(tab=>(
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+                {visibleSetupTabs.map(tab=>(
                   <button
                     key={tab.id}
                     type="button"
@@ -887,7 +961,7 @@ const Settings: React.FC<SettingsProps> = ({
           )}
 
           {/* BACKUP EXCEL */}
-          {activeSubTab==='backup'&&(
+          {isAdminSession && activeSubTab==='backup'&&(
             <div className="animate-fadeIn space-y-6">
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                 <div className="p-6 bg-slate-900 text-white">
@@ -945,7 +1019,7 @@ const Settings: React.FC<SettingsProps> = ({
           )}
 
           {/* RUMAH & ACARA */}
-          {activeSubTab==='system_config'&&(
+          {isAdminSession && activeSubTab==='system_config'&&(
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn">
               <div className="p-6 border-b border-gray-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -1083,8 +1157,78 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
           )}
 
+          {/* AKSES GURU */}
+          {isAdminSession && activeSubTab==='access'&&(
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn">
+              <div className="p-6 border-b border-gray-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><KeyRound className="w-6 h-6 text-blue-600"/> Tetapan Password Guru Rumah</h2>
+                  <p className="text-sm text-gray-500">Tetapkan password untuk admin dan guru rumah sukan. Guru hanya boleh daftar peserta rumah masing-masing.</p>
+                </div>
+                <button onClick={handleSaveAccessConfig}
+                  className={`flex items-center px-5 py-2 rounded-lg text-white font-bold shadow-md transition-all ${isAccessConfigSaved?'bg-green-600':'bg-blue-600 hover:bg-blue-700'}`}>
+                  <Save className="w-4 h-4 mr-2"/>{isAccessConfigSaved?'Disimpan!':'Simpan Password'}
+                </button>
+              </div>
+              <div className="p-6 space-y-6 bg-gray-50">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="font-black text-amber-900">Penting</div>
+                  <p className="mt-1 leading-relaxed">
+                    Jangan guna password yang sama untuk dua rumah sukan. Jika password guru dikosongkan, guru rumah tersebut tidak boleh login.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <label className="text-sm font-black text-slate-700 mb-2 block">Password Admin Utama</label>
+                  <input
+                    type="text"
+                    value={localAccessConfig.adminPassword}
+                    onChange={e=>handleAdminPasswordChange(e.target.value)}
+                    className="w-full max-w-lg rounded-lg border border-slate-300 p-3 text-base font-bold tracking-wide outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Password admin"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">Admin boleh akses semua tetapan, import, keputusan, backup dan pengurusan data.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {localSystemConfig.houses.map((house, index)=> {
+                    const active = house.active;
+                    return (
+                      <div key={house.id} className={`rounded-xl border p-5 shadow-sm ${active?'bg-white border-gray-200':'bg-gray-50 border-gray-200 opacity-70'}`}>
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-11 h-11 rounded-xl ${HOUSE_CONFIG[house.id].color}`}></div>
+                            <div>
+                              <div className="text-xs font-black uppercase text-gray-400">Rumah {index+1}</div>
+                              <div className="font-black text-gray-900">{getHouseName(localSystemConfig, house.id)}</div>
+                            </div>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-[10px] font-black ${active?'bg-green-100 text-green-700':'bg-gray-200 text-gray-500'}`}>
+                            {active ? 'AKTIF' : 'TIDAK AKTIF'}
+                          </span>
+                        </div>
+                        <label className="text-xs font-black uppercase tracking-wide text-gray-500 block mb-1">Password Guru Rumah</label>
+                        <input
+                          type="text"
+                          value={localAccessConfig.housePasswords?.[house.id] || ''}
+                          onChange={e=>handleHousePasswordChange(house.id, e.target.value)}
+                          disabled={!active}
+                          className="w-full rounded-lg border border-gray-300 p-3 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
+                          placeholder={active ? `Password guru ${getHouseName(localSystemConfig, house.id)}` : 'Rumah tidak aktif'}
+                        />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Guru ini hanya boleh daftar peserta Rumah {getHouseName(localSystemConfig, house.id)}.
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* SISTEM MATA */}
-          {activeSubTab==='config'&&(
+          {isAdminSession && activeSubTab==='config'&&(
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn">
               <div className="p-6 border-b border-gray-200 bg-slate-50 flex justify-between items-center">
                 <div>
@@ -1195,7 +1339,7 @@ const Settings: React.FC<SettingsProps> = ({
           )}
 
           {/* HAD ACARA */}
-          {activeSubTab==='limits'&&(
+          {isAdminSession && activeSubTab==='limits'&&(
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn">
               <div className="p-6 border-b border-gray-200 bg-slate-50">
                 <h2 className="text-xl font-bold text-gray-900">Tetapan Had Acara Murid</h2>
@@ -1265,7 +1409,7 @@ const Settings: React.FC<SettingsProps> = ({
           )}
 
           {/* PENGURUSAN DATA */}
-          {activeSubTab==='system'&&(
+          {isAdminSession && activeSubTab==='system'&&(
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn flex flex-col gap-6">
               <div className="p-6 border-b border-gray-200 bg-slate-50">
                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Database className="w-6 h-6"/> Pengurusan Data</h2>

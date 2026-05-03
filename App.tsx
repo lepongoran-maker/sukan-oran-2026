@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { LockKeyhole } from 'lucide-react';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import Navigation from './components/Navigation';
 import ResultsList from './components/ResultsList';
@@ -7,18 +8,26 @@ import ParticipantList from './components/ParticipantList';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import { 
-  Gender, HouseStats, Participant, WinnerProfile, PointsConfig, EventLimitsConfig, SystemConfig 
+  AccessConfig, AccessSession, Gender, HouseColor, HouseStats, Participant, WinnerProfile, PointsConfig, EventLimitsConfig, SystemConfig, StudentRosterEntry 
 } from './types';
 import { 
-  DEFAULT_SYSTEM_CONFIG, POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI
+  DEFAULT_ACCESS_CONFIG, DEFAULT_SYSTEM_CONFIG, POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI
 } from './constants';
-import { activeEvents, normalizeSystemConfig } from './utils/systemConfig';
+import { activeEvents, activeHouseIds, getHouseName, normalizeSystemConfig } from './utils/systemConfig';
 import { calculateHouseStats } from './utils/scoring';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [accessSession, setAccessSession] = useState<AccessSession | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sk_oran_access_session') || 'null') as AccessSession | null;
+    } catch {
+      return null;
+    }
+  });
   
   const [registrations, setRegistrations] = useState<Record<string, Participant[]>>({});
+  const [studentRoster, setStudentRoster] = useState<StudentRosterEntry[]>([]);
   const [results, setResults] = useState<Record<string, WinnerProfile[]>>({});
   
   const [pointsConfig, setPointsConfig] = useState<PointsConfig>({
@@ -34,6 +43,7 @@ function App() {
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
+  const [accessConfig, setAccessConfig] = useState<AccessConfig>(DEFAULT_ACCESS_CONFIG);
 
   useEffect(() => {
     const testConnection = async () => {
@@ -55,6 +65,10 @@ function App() {
 
     const unsubResults = onSnapshot(doc(db, 'appData', 'results'), (docSnap) => {
       if (docSnap.exists()) setResults(docSnap.data().data || {});
+    });
+
+    const unsubStudentRoster = onSnapshot(doc(db, 'appData', 'studentRoster'), (docSnap) => {
+      if (docSnap.exists()) setStudentRoster(docSnap.data().data || []);
     });
 
     const unsubPoints = onSnapshot(doc(db, 'appData', 'pointsConfig'), (docSnap) => {
@@ -81,10 +95,28 @@ function App() {
       }
     });
 
-    return () => { unsubRegs(); unsubResults(); unsubPoints(); unsubLimits(); unsubSystemConfig(); };
+    const unsubAccessConfig = onSnapshot(doc(db, 'appData', 'accessConfig'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<AccessConfig>;
+        setAccessConfig({
+          ...DEFAULT_ACCESS_CONFIG,
+          ...data,
+          housePasswords: {
+            ...DEFAULT_ACCESS_CONFIG.housePasswords,
+            ...(data.housePasswords || {}),
+          },
+        });
+      }
+    });
+
+    return () => { unsubRegs(); unsubResults(); unsubStudentRoster(); unsubPoints(); unsubLimits(); unsubSystemConfig(); unsubAccessConfig(); };
   }, []);
 
   const handleUpdateRegistration = async (key: string, participants: Participant[]) => {
+    if (accessSession?.role === 'house_teacher' && accessSession.house && !key.startsWith(`${accessSession.house}_`)) {
+      alert('Akses guru hanya dibenarkan untuk rumah sukan sendiri sahaja.');
+      return;
+    }
     const newRegs = { ...registrations, [key]: participants };
     setRegistrations(newRegs);
     try { await setDoc(doc(db, 'appData', 'registrations'), { data: newRegs }); }
@@ -125,6 +157,22 @@ function App() {
     setRegistrations(mergedRegs);
     try { await setDoc(doc(db, 'appData', 'registrations'), { data: mergedRegs }); }
     catch (error) { console.error("Error saving bulk registrations:", error); }
+  };
+
+  const handleImportStudentRoster = async (newRoster: StudentRosterEntry[]) => {
+    const rosterMap = new Map<string, StudentRosterEntry>();
+    [...studentRoster, ...newRoster].forEach((student) => {
+      const key = `${student.house}_${student.year || 'ALL'}_${student.gender || 'ALL'}_${student.name.trim().toLowerCase()}_${student.className.trim().toLowerCase()}`;
+      rosterMap.set(key, student);
+    });
+    const mergedRoster = Array.from(rosterMap.values()).sort((a, b) =>
+      String(a.house).localeCompare(String(b.house)) ||
+      (a.year || 0) - (b.year || 0) ||
+      a.name.localeCompare(b.name)
+    );
+    setStudentRoster(mergedRoster);
+    try { await setDoc(doc(db, 'appData', 'studentRoster'), { data: mergedRoster }); }
+    catch (error) { console.error("Error saving student roster:", error); }
   };
 
   const handleUpdateParticipantGlobal = async (oldName: string, newName: string, newClass: string) => {
@@ -174,11 +222,52 @@ function App() {
     catch (error) { console.error("Error saving system config:", error); }
   };
 
+  const handleUpdateAccessConfig = async (config: AccessConfig) => {
+    const normalized = {
+      ...DEFAULT_ACCESS_CONFIG,
+      ...config,
+      housePasswords: {
+        ...DEFAULT_ACCESS_CONFIG.housePasswords,
+        ...(config.housePasswords || {}),
+      },
+    };
+    setAccessConfig(normalized);
+    try { await setDoc(doc(db, 'appData', 'accessConfig'), normalized); }
+    catch (error) { console.error("Error saving access config:", error); }
+  };
+
+  const handleAccessLogin = (password: string) => {
+    const cleanPassword = password.trim();
+    if (!cleanPassword) return false;
+
+    let session: AccessSession | null = null;
+    if (cleanPassword === accessConfig.adminPassword) {
+      session = { role: 'admin' };
+    } else {
+      const house = activeHouseIds(systemConfig).find(houseId =>
+        (accessConfig.housePasswords?.[houseId] || '').trim() === cleanPassword
+      );
+      if (house) session = { role: 'house_teacher', house };
+    }
+
+    if (!session) return false;
+    setAccessSession(session);
+    localStorage.setItem('sk_oran_access_session', JSON.stringify(session));
+    return true;
+  };
+
+  const handleAccessLogout = () => {
+    setAccessSession(null);
+    localStorage.removeItem('sk_oran_access_session');
+  };
+
   const handleResetData = async (type: 'participants' | 'results' | 'all') => {
     try {
       if (type === 'participants' || type === 'all') {
         setRegistrations({});
+        setStudentRoster([]);
         await setDoc(doc(db, 'appData', 'registrations'), { data: {} });
+        await setDoc(doc(db, 'appData', 'studentRoster'), { data: [] });
       }
       if (type === 'results' || type === 'all') {
         setResults({});
@@ -200,7 +289,13 @@ function App() {
         {activeTab === 'dashboard' && <Dashboard stats={stats} results={results} pointsConfig={pointsConfig} systemConfig={systemConfig}/>}
         {activeTab === 'participants' && <ParticipantList registrations={registrations} systemConfig={systemConfig}/>}
         {activeTab === 'results_list' && <ResultsList results={results} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/>}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && !accessSession && (
+          <AccessLogin
+            systemConfig={systemConfig}
+            onLogin={handleAccessLogin}
+          />
+        )}
+        {activeTab === 'settings' && accessSession && (
           <Settings
             pointsConfig={pointsConfig}
             onUpdatePoints={handleUpdatePoints}
@@ -208,10 +303,16 @@ function App() {
             onUpdateEventLimits={handleUpdateEventLimits}
             systemConfig={systemConfig}
             onUpdateSystemConfig={handleUpdateSystemConfig}
+            accessConfig={accessConfig}
+            onUpdateAccessConfig={handleUpdateAccessConfig}
+            accessSession={accessSession}
+            onLogout={handleAccessLogout}
             registrations={registrations}
             onUpdateRegistration={handleUpdateRegistration}
             onBulkRegistration={handleBulkRegistration}
             onBulkOverride={handleBulkOverride}
+            studentRoster={studentRoster}
+            onImportStudentRoster={handleImportStudentRoster}
             results={results}
             onSaveResult={handleSaveResult}
             onResetData={handleResetData}
@@ -222,5 +323,64 @@ function App() {
     </div>
   );
 }
+
+const AccessLogin = ({
+  systemConfig,
+  onLogin,
+}: {
+  systemConfig: SystemConfig;
+  onLogin: (password: string) => boolean;
+}) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (onLogin(password)) {
+      setPassword('');
+      setError('');
+      return;
+    }
+    setError('Password tidak sah. Sila semak password admin atau guru rumah sukan.');
+  };
+
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-2xl items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="bg-slate-900 p-6 text-white">
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-yellow-400 text-slate-950">
+            <LockKeyhole className="h-6 w-6" />
+          </div>
+          <h2 className="text-2xl font-black">Akses Admin / Guru Rumah</h2>
+          <p className="mt-1 text-sm text-slate-300">Masukkan password untuk mengurus pendaftaran peserta.</p>
+        </div>
+        <div className="space-y-4 p-6">
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+            <div className="font-black">Tahap akses</div>
+            <p className="mt-1">Admin boleh kawal semua tetapan. Guru rumah sukan hanya boleh daftar peserta rumah masing-masing.</p>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-bold text-slate-700">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              placeholder="Masukkan password"
+              autoFocus
+            />
+          </div>
+          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
+          <button type="submit" className="w-full rounded-xl bg-slate-900 px-5 py-3 font-black text-white shadow-lg transition-colors hover:bg-slate-800">
+            Masuk
+          </button>
+          <div className="text-xs leading-relaxed text-slate-500">
+            Rumah aktif sekarang: {activeHouseIds(systemConfig).map(house => getHouseName(systemConfig, house)).join(', ')}
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+};
 
 export default App;

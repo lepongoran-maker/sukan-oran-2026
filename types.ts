@@ -29,6 +29,19 @@ export interface Participant {
   className: string;
 }
 
+export interface StudentRosterEntry extends Participant {
+  house: HouseColor;
+  year?: number;
+  gender?: Gender;
+}
+
+export type AccessRole = 'admin' | 'house_teacher';
+
+export interface AccessSession {
+  role: AccessRole;
+  house?: HouseColor;
+}
+
 export interface WinnerProfile {
   house: HouseColor;
   name: string;
@@ -111,4 +124,9 @@ export interface SystemConfig {
   houses: HouseSettings[];
   events: EventSettings[];
   scoring?: ScoringConfig;
+}
+
+export interface AccessConfig {
+  adminPassword: string;
+  housePasswords: Record<HouseColor, string>;
 }

@@ -1,4 +1,4 @@
-import { EventCategory, EventDefinition, EventSettings, EventType, HouseColor, HouseSettings, SystemConfig } from './types';
+import { AccessConfig, EventCategory, EventDefinition, EventSettings, EventType, HouseColor, HouseSettings, SystemConfig } from './types';
 
 export const HOUSE_CONFIG = {
   [HouseColor.MERAH]: { color: 'bg-red-600', text: 'text-white', border: 'border-red-600', name: 'Merah' },
@@ -65,5 +65,17 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   scoring: {
     mode: 'POINTS',
     scope: 'ALL_EVENTS',
+  },
+};
+
+export const DEFAULT_ACCESS_CONFIG: AccessConfig = {
+  adminPassword: 'SKORANADMIN206',
+  housePasswords: {
+    [HouseColor.MERAH]: '',
+    [HouseColor.BIRU]: '',
+    [HouseColor.HIJAU]: '',
+    [HouseColor.KUNING]: '',
+    [HouseColor.UNGU]: '',
+    [HouseColor.OREN]: '',
   },
 };
