@@ -15,6 +15,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
   const [selectedHouse, setSelectedHouse] = useState<HouseColor>(HouseColor.MERAH);
   const [selectedYear, setSelectedYear] = useState<number>(1);
   const [selectedGender, setSelectedGender] = useState<Gender>(Gender.LELAKI);
+  const availableYears = React.useMemo(
+    () => [1, 2, 3, 4, 5, 6].filter(year =>
+      eventsForYear(systemConfig, year).some(evt => evt.type !== EventType.KHUSUS)
+    ),
+    [systemConfig]
+  );
 
   React.useEffect(() => {
     if (!houses.some(house => house.id === selectedHouse)) {
@@ -22,8 +28,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
     }
   }, [houses, selectedHouse]);
 
+  React.useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears, selectedYear]);
+
   const unfilteredEvents = eventsForYear(systemConfig, selectedYear);
-  const currentEvents = unfilteredEvents.filter(evt => !evt.id.startsWith('sk_'));
+  const currentEvents = unfilteredEvents.filter(evt => evt.type !== EventType.KHUSUS);
   const houseConfig = getHouseUi(systemConfig, selectedHouse);
 
   // Helper to generate unique key for storage
@@ -51,7 +63,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-3 sm:p-6">
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
         {/* Header Config */}
         <div className="p-6 border-b border-gray-200 bg-gray-50">
@@ -81,7 +93,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tahun / Kategori</label>
               <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 4, 5, 6].map((year) => (
+                {availableYears.map((year) => (
                   <button
                     key={year}
                     onClick={() => setSelectedYear(year)}
@@ -94,6 +106,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
                     Tahun {year}
                   </button>
                 ))}
+                {availableYears.length === 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700">
+                    Tiada acara aktif
+                  </div>
+                )}
               </div>
             </div>
 
@@ -119,7 +136,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
         </div>
 
         {/* Input Grid */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-slate-700">
               Senarai Acara: Tahun {selectedYear} ({selectedGender === Gender.LELAKI ? 'Lelaki' : 'Perempuan'})
@@ -127,7 +144,62 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, onUp
             <p className="text-sm text-gray-500">Masukkan nama peserta dan kelas.</p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-4 md:hidden">
+            {currentEvents.map((event) => {
+              const key = getKey(event.id);
+              const currentParticipants = registrations[key] || [];
+              const limit = eventLimits?.eventSlots?.[event.id] ?? event.maxParticipants;
+              const slots = Array.from({ length: limit });
+
+              return (
+                <div key={event.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-200 bg-slate-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-base font-black text-gray-900">{event.name}</div>
+                        <div className="mt-1 text-xs font-bold uppercase tracking-wide text-gray-500">
+                          {event.type === EventType.RELAY ? 'Relay' : 'Individu'} - {limit} slot
+                        </div>
+                      </div>
+                      {event.type === EventType.RELAY && (
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-black text-blue-800">
+                          Relay
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-3 p-3">
+                    {slots.map((_, index) => {
+                      const participant = currentParticipants[index] || { name: '', className: '' };
+                      return (
+                        <div key={index} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                          <label className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">
+                            {event.type === EventType.RELAY ? `Pelari ${index + 1}` : `Peserta ${index + 1}`}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Nama penuh peserta"
+                            value={participant.name}
+                            onChange={(e) => handleParticipantChange(event.id, index, 'name', e.target.value)}
+                            className="mb-2 block w-full rounded-lg border border-gray-300 bg-white p-3 text-base shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Kelas"
+                            value={participant.className}
+                            onChange={(e) => handleParticipantChange(event.id, index, 'className', e.target.value)}
+                            className="block w-full rounded-lg border border-gray-300 bg-white p-3 text-base shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
               <thead className="bg-slate-50">
                 <tr>

@@ -21,7 +21,7 @@ interface SettingsProps {
   onBulkOverride?: (newRegistrations: Record<string, Participant[]>) => void;
   results: Record<string, WinnerProfile[]>;
   onSaveResult: (eventId: string, year: number, gender: Gender, positions: WinnerProfile[]) => void;
-  onResetData: () => void;
+  onResetData: (type: 'participants' | 'results' | 'all') => void;
   stats?: HouseStats[];
 }
 
@@ -482,6 +482,7 @@ const Settings: React.FC<SettingsProps> = ({
 
   const handleSavePoints = () => {
     onUpdatePoints(localConfig);
+    onUpdateSystemConfig(normalizeSystemConfig(localSystemConfig));
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -501,6 +502,17 @@ const Settings: React.FC<SettingsProps> = ({
   const [localSystemConfig, setLocalSystemConfig] = useState<SystemConfig>(normalizeSystemConfig(systemConfig));
   const [isSystemConfigSaved, setIsSystemConfigSaved] = useState(false);
   useEffect(() => { setLocalSystemConfig(normalizeSystemConfig(systemConfig)); }, [systemConfig]);
+
+  const handleScoringChange = (patch: Partial<NonNullable<SystemConfig['scoring']>>) => {
+    setLocalSystemConfig(prev => ({
+      ...prev,
+      scoring: {
+        ...(normalizeSystemConfig(prev).scoring || { mode: 'POINTS', scope: 'ALL_EVENTS' }),
+        ...patch,
+      },
+    }));
+    setIsSaved(false);
+  };
 
   const handleLimitsChange = (field: keyof EventLimitsConfig, value: string) => {
     setLocalLimits(prev => ({ ...prev, [field]: parseInt(value) || 0 }));
@@ -568,6 +580,15 @@ const Settings: React.FC<SettingsProps> = ({
     setIsSystemConfigSaved(false);
   };
 
+  const handleDeleteEvent = (eventId: string, eventName: string) => {
+    if (!confirm(`Buang acara "${eventName}" daripada senarai? Perubahan hanya disimpan selepas tekan Simpan Tetapan.`)) return;
+    setLocalSystemConfig(prev => ({
+      ...prev,
+      events: prev.events.filter(event => event.id !== eventId),
+    }));
+    setIsSystemConfigSaved(false);
+  };
+
   const handleSaveSystemConfig = () => {
     onUpdateSystemConfig(normalizeSystemConfig(localSystemConfig));
     setIsSystemConfigSaved(true);
@@ -585,6 +606,15 @@ const Settings: React.FC<SettingsProps> = ({
     setIsExporting(true);
     setTimeout(() => { exportToExcel(registrations, results, pointsConfig, systemConfig); setIsExporting(false); }, 300);
   };
+
+  const activeStudentYears = [1, 2, 3, 4, 5, 6].filter(year =>
+    localSystemConfig.events.some(event =>
+      event.active &&
+      event.type !== EventType.KHUSUS &&
+      event.years.includes(year)
+    )
+  );
+  const hiddenStudentYears = [1, 2, 3, 4, 5, 6].filter(year => !activeStudentYears.includes(year));
 
   // ── Print Violations PDF ──
   const handlePrintViolations = () => {
@@ -779,6 +809,13 @@ const Settings: React.FC<SettingsProps> = ({
     house==='MERAH'?'bg-red-500':house==='BIRU'?'bg-blue-500':house==='HIJAU'?'bg-green-500':
     house==='KUNING'?'bg-yellow-400':house==='UNGU'?'bg-purple-500':'bg-orange-500';
 
+  const setupTabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
+    { id:'system_config', icon:<SettingsIcon className="w-4 h-4"/>, label:'Rumah & Acara' },
+    { id:'config', icon:<LayoutGrid className="w-4 h-4"/>, label:'Sistem Mata' },
+    { id:'limits', icon:<ShieldAlert className="w-4 h-4"/>, label:'Had Acara Murid' },
+  ];
+  const isSetupTab = setupTabs.some(tab => tab.id === activeSubTab);
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 min-h-screen">
       <div className="flex flex-col lg:flex-row gap-6">
@@ -791,22 +828,16 @@ const Settings: React.FC<SettingsProps> = ({
               <p className="text-xs text-slate-400 mt-1">Pengurusan data & sistem</p>
             </div>
             <nav className="p-2 space-y-1">
+              <button onClick={()=>setActiveSubTab('system_config')}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${isSetupTab?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
+                <SettingsIcon className="w-5 h-5"/> Tetapan Sistem
+              </button>
+              <div className="h-px bg-gray-200 my-2 mx-4"/>
               {[
                 { id:'registration', icon:<ClipboardList className="w-5 h-5"/>, label:'Pendaftaran (Manual)' },
                 { id:'import',       icon:<FileSpreadsheet className="w-5 h-5"/>, label:'Import CSV (Pukal)' },
                 { id:'results_entry',icon:<Trophy className="w-5 h-5"/>,        label:'Masuk Keputusan' },
                 { id:'competition_form',icon:<Printer className="w-5 h-5"/>,    label:'Borang Pertandingan' },
-              ].map(tab=>(
-                <button key={tab.id} onClick={()=>setActiveSubTab(tab.id as AdminTab)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab===tab.id?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
-                  {tab.icon}{tab.label}
-                </button>
-              ))}
-              <div className="h-px bg-gray-200 my-2 mx-4"/>
-              {[
-                { id:'system_config', icon:<SettingsIcon className="w-5 h-5"/>, label:'Rumah & Acara' },
-                { id:'config', icon:<LayoutGrid className="w-5 h-5"/>, label:'Sistem Mata' },
-                { id:'limits', icon:<ShieldAlert className="w-5 h-5"/>, label:'Had Acara Murid' },
               ].map(tab=>(
                 <button key={tab.id} onClick={()=>setActiveSubTab(tab.id as AdminTab)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-lg transition-colors ${activeSubTab===tab.id?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-50'}`}>
@@ -832,6 +863,28 @@ const Settings: React.FC<SettingsProps> = ({
           {activeSubTab==='import'        && <div className="animate-fadeIn"><CsvImport existingRegistrations={registrations} onBulkRegistration={onBulkRegistration} onBulkOverride={onBulkOverride} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
           {activeSubTab==='results_entry' && <div className="animate-fadeIn"><ResultsEntry existingResults={results} registrations={registrations} onSaveResult={onSaveResult} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/></div>}
           {activeSubTab==='competition_form' && <div className="animate-fadeIn"><CompetitionForm registrations={registrations} systemConfig={systemConfig}/></div>}
+
+          {isSetupTab&&(
+            <div className="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-2 animate-fadeIn">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {setupTabs.map(tab=>(
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={()=>setActiveSubTab(tab.id)}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-black transition-all ${
+                      activeSubTab===tab.id
+                        ? 'bg-slate-900 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-700'
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* BACKUP EXCEL */}
           {activeSubTab==='backup'&&(
@@ -959,6 +1012,18 @@ const Settings: React.FC<SettingsProps> = ({
                   </button>
                 </div>
 
+                {hiddenStudentYears.length > 0 && (
+                  <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"/>
+                    <div>
+                      <div className="font-black text-amber-900">Makluman: Tab Tahun Tersembunyi</div>
+                      <p className="text-sm text-amber-800 leading-relaxed mt-1">
+                        Tahun {hiddenStudentYears.join(', ')} tidak mempunyai acara murid yang aktif. Tab tahun tersebut tidak akan muncul dalam Pendaftaran Peserta dan Jaguh Pingat Terunggul.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   {localSystemConfig.events.map(event=>(
                     <div key={event.id} className={`bg-white border rounded-xl p-4 ${event.active?'border-gray-200':'border-gray-200 opacity-70'}`}>
@@ -995,10 +1060,20 @@ const Settings: React.FC<SettingsProps> = ({
                           <input type="text" value={event.years.join(',')} onChange={e=>handleEventYearsChange(event.id,e.target.value)}
                             className="w-full border border-gray-300 rounded-lg p-2 text-sm font-semibold"/>
                         </div>
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-1">
                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Atlet / Rumah</label>
                           <input type="number" min="0" value={event.maxParticipants} onChange={e=>handleEventChange(event.id,{maxParticipants:parseInt(e.target.value)||0})}
                             className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold"/>
+                        </div>
+                        <div className="md:col-span-1">
+                          <button
+                            type="button"
+                            onClick={()=>handleDeleteEvent(event.id,event.name)}
+                            className="w-full inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-xs font-black text-red-700 hover:bg-red-100 hover:border-red-300 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4"/>
+                            Buang
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1021,6 +1096,91 @@ const Settings: React.FC<SettingsProps> = ({
                 </button>
               </div>
               <div className="p-6 bg-gray-50">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800">Kaedah Kiraan Keseluruhan</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Pilihan ini menentukan cara ranking dashboard, senarai keputusan dan jumlah rumah sukan dikira.
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700 border border-slate-200">
+                      {localSystemConfig.scoring?.mode === 'MEDALS' ? 'Kiraan Pingat' : 'Kiraan Mata'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+                    {[
+                      {
+                        mode: 'POINTS' as const,
+                        title: 'Kiraan Mata',
+                        desc: 'Ranking ikut markah tempat pertama hingga keenam seperti jadual mata di bawah.',
+                        accent: 'blue',
+                      },
+                      {
+                        mode: 'MEDALS' as const,
+                        title: 'Kiraan Pingat',
+                        desc: 'Ranking ikut emas, kemudian perak, kemudian gangsa. Mata manual tidak menentukan kedudukan.',
+                        accent: 'yellow',
+                      },
+                    ].map(option => {
+                      const active = (localSystemConfig.scoring?.mode || 'POINTS') === option.mode;
+                      return (
+                        <button
+                          type="button"
+                          key={option.mode}
+                          onClick={() => handleScoringChange({ mode: option.mode })}
+                          className={`text-left rounded-xl border p-4 transition-all ${active ? option.accent === 'blue' ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-100' : 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-100' : 'bg-white border-gray-200 hover:border-slate-300'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${active ? option.accent === 'blue' ? 'border-blue-600' : 'border-yellow-500' : 'border-gray-300'}`}>
+                              {active && <div className={`w-2.5 h-2.5 rounded-full ${option.accent === 'blue' ? 'bg-blue-600' : 'bg-yellow-500'}`} />}
+                            </div>
+                            <div className="font-black text-gray-900">{option.title}</div>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-2 leading-relaxed">{option.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-bold text-gray-700 mb-2 block">Acara yang dikira dalam jumlah keseluruhan</label>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {[
+                        {
+                          scope: 'ALL_EVENTS' as const,
+                          title: 'Semua acara',
+                          desc: 'Kira Merentas Desa, Sukantara, Olahraga, Tarik Tali dan acara khas lain.',
+                        },
+                        {
+                          scope: 'ATHLETICS_ONLY' as const,
+                          title: 'Olahraga sahaja',
+                          desc: 'Kira acara olahraga individu dan relay sahaja. Acara khas tidak masuk jumlah keseluruhan.',
+                        },
+                      ].map(option => {
+                        const active = (localSystemConfig.scoring?.scope || 'ALL_EVENTS') === option.scope;
+                        return (
+                          <button
+                            type="button"
+                            key={option.scope}
+                            onClick={() => handleScoringChange({ scope: option.scope })}
+                            className={`text-left rounded-xl border p-4 transition-all ${active ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-100' : 'bg-white border-gray-200 hover:border-slate-300'}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${active ? 'border-emerald-600' : 'border-gray-300'}`}>
+                                {active && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />}
+                              </div>
+                              <div className="font-black text-gray-900">{option.title}</div>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-2 leading-relaxed">{option.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 {renderPointsInputs('individu', 'Acara Individu', <Award className="w-6 h-6"/>)}
                 {renderPointsInputs('relay', 'Acara Relay (Berpasukan)', <Users className="w-6 h-6"/>)}
                 {renderPointsInputs('tarikTali', 'Acara Tarik Tali', <Anchor className="w-6 h-6"/>)}
@@ -1151,10 +1311,28 @@ const Settings: React.FC<SettingsProps> = ({
                 <div className="border border-red-200 rounded-xl p-6">
                   <h3 className="font-bold text-red-900 text-lg mb-2 flex items-center gap-2"><Trash2 className="w-5 h-5"/> Kosongkan Semua Data</h3>
                   <p className="text-red-800 text-sm leading-relaxed mb-4">
-                    Ini akan memadamkan <strong>SEMUA</strong> data peserta dan keputusan pertandingan. Markah rumah sukan akan kembali kepada 0.<br/>
-                    Data yang dipadam tidak boleh dikembalikan.
+                    Pilih data yang mahu dipadam. Setiap tindakan akan minta pengesahan dahulu kerana data yang dipadam tidak boleh dikembalikan.
                   </p>
-                  <ResetButton onConfirm={onResetData}/>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <ResetButton
+                      title="Padam Peserta"
+                      description="Buang semua nama peserta dan pendaftaran acara. Keputusan sedia ada tidak dipadam."
+                      confirmText="YA, PADAM PESERTA"
+                      onConfirm={() => onResetData('participants')}
+                    />
+                    <ResetButton
+                      title="Padam Keputusan"
+                      description="Padam semua keputusan pertandingan. Data peserta masih kekal."
+                      confirmText="YA, PADAM KEPUTUSAN"
+                      onConfirm={() => onResetData('results')}
+                    />
+                    <ResetButton
+                      title="Padam Semua"
+                      description="Padam semua peserta dan semua keputusan. Markah rumah sukan akan kembali kepada 0."
+                      confirmText="YA, PADAM SEMUA"
+                      onConfirm={() => onResetData('all')}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1165,21 +1343,46 @@ const Settings: React.FC<SettingsProps> = ({
   );
 };
 
-const ResetButton = ({ onConfirm }: { onConfirm: () => void }) => {
+const ResetButton = ({
+  title,
+  description,
+  confirmText,
+  onConfirm,
+}: {
+  title: string;
+  description: string;
+  confirmText: string;
+  onConfirm: () => void;
+}) => {
   const [step, setStep] = useState<'idle'|'confirm'>('idle');
   useEffect(() => {
-    if (step==='confirm') { const t = setTimeout(()=>setStep('idle'), 3000); return ()=>clearTimeout(t); }
+    if (step==='confirm') { const t = setTimeout(()=>setStep('idle'), 5000); return ()=>clearTimeout(t); }
   }, [step]);
   if (step==='confirm') return (
-    <button type="button" onClick={onConfirm}
-      className="bg-red-800 hover:bg-red-900 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2 animate-pulse w-fit">
-      <AlertTriangle className="w-5 h-5"/> YA, SAYA PASTI! (TEKAN UNTUK PADAM)
-    </button>
+    <div className="rounded-xl border-2 border-red-500 bg-white p-4 shadow-sm">
+      <div className="flex items-start gap-3 mb-3">
+        <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0"/>
+        <div>
+          <div className="font-black text-red-900">Pengesahan diperlukan</div>
+          <p className="text-xs text-red-700 leading-relaxed mt-1">{description}</p>
+        </div>
+      </div>
+      <button type="button" onClick={onConfirm}
+        className="w-full bg-red-800 hover:bg-red-900 text-white font-black py-3 px-4 rounded-lg shadow-lg flex items-center justify-center gap-2 animate-pulse">
+        <AlertTriangle className="w-5 h-5"/> {confirmText}
+      </button>
+      <button type="button" onClick={()=>setStep('idle')} className="w-full mt-2 text-xs font-bold text-gray-500 hover:text-gray-800">
+        Batal
+      </button>
+    </div>
   );
   return (
     <button type="button" onClick={()=>setStep('confirm')}
-      className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2 transition-transform transform hover:scale-105 active:scale-95 w-fit">
-      <Trash2 className="w-5 h-5"/> Padam Semua Data & Reset Sistem
+      className="text-left rounded-xl border border-red-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md active:translate-y-0">
+      <div className="flex items-center gap-2 font-black text-red-800">
+        <Trash2 className="w-5 h-5"/> {title}
+      </div>
+      <p className="text-xs text-red-700 leading-relaxed mt-2">{description}</p>
     </button>
   );
 };

@@ -4,6 +4,10 @@ import { EventDefinition, HouseColor, HouseSettings, SystemConfig } from '../typ
 export const normalizeSystemConfig = (config?: Partial<SystemConfig> | null): SystemConfig => {
   const houseOverrides = new Map((config?.houses || []).map(house => [house.id, house]));
   const eventOverrides = new Map((config?.events || []).map(event => [event.id, event]));
+  const scoring = {
+    ...DEFAULT_SYSTEM_CONFIG.scoring,
+    ...(config?.scoring || {}),
+  };
 
   const houses = DEFAULT_SYSTEM_CONFIG.houses.map(defaultHouse => ({
     ...defaultHouse,
@@ -20,7 +24,7 @@ export const normalizeSystemConfig = (config?: Partial<SystemConfig> | null): Sy
     ...customEvents,
   ];
 
-  return { houses, events };
+  return { houses, events, scoring };
 };
 
 export const activeHouses = (config: SystemConfig): HouseSettings[] =>

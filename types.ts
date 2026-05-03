@@ -71,6 +71,7 @@ export interface HouseStats {
   bronze: number;
   pointsTahap1: number;
   pointsTahap2: number;
+  rankingScore?: number;
 }
 
 export interface PointsConfig {
@@ -98,7 +99,16 @@ export interface EventSettings extends EventDefinition {
   category: EventCategory;
 }
 
+export type ScoringMode = 'POINTS' | 'MEDALS';
+export type ScoringScope = 'ALL_EVENTS' | 'ATHLETICS_ONLY';
+
+export interface ScoringConfig {
+  mode: ScoringMode;
+  scope: ScoringScope;
+}
+
 export interface SystemConfig {
   houses: HouseSettings[];
   events: EventSettings[];
+  scoring?: ScoringConfig;
 }

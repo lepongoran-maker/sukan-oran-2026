@@ -62,4 +62,8 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     ...withCategory(EVENTS_TAHAP_2, 'TAHAP_2'),
     ...withCategory(EVENTS_TERBUKA, 'TERBUKA'),
   ],
+  scoring: {
+    mode: 'POINTS',
+    scope: 'ALL_EVENTS',
+  },
 };

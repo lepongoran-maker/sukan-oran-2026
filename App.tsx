@@ -6,22 +6,17 @@ import ResultsList from './components/ResultsList';
 import ParticipantList from './components/ParticipantList';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
-import { Lock, LogOut, ShieldCheck } from 'lucide-react';
 import { 
-  HouseColor, Gender, HouseStats, EventType, Participant, WinnerProfile, PointsConfig, EventLimitsConfig, SystemConfig 
+  Gender, HouseStats, Participant, WinnerProfile, PointsConfig, EventLimitsConfig, SystemConfig 
 } from './types';
 import { 
   DEFAULT_SYSTEM_CONFIG, POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI
 } from './constants';
-import { activeHouseIds, activeEvents, eventById, normalizeSystemConfig } from './utils/systemConfig';
-
-const ADMIN_PASSWORD = 'SKORANADMIN206';
+import { activeEvents, normalizeSystemConfig } from './utils/systemConfig';
+import { calculateHouseStats } from './utils/scoring';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [adminUnlocked, setAdminUnlocked] = useState(() => sessionStorage.getItem('skOranAdminUnlocked') === 'true');
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [adminPasswordError, setAdminPasswordError] = useState('');
   
   const [registrations, setRegistrations] = useState<Record<string, Participant[]>>({});
   const [results, setResults] = useState<Record<string, WinnerProfile[]>>({});
@@ -179,25 +174,6 @@ function App() {
     catch (error) { console.error("Error saving system config:", error); }
   };
 
-  const handleAdminLogin = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (adminPasswordInput === ADMIN_PASSWORD) {
-      setAdminUnlocked(true);
-      setAdminPasswordInput('');
-      setAdminPasswordError('');
-      sessionStorage.setItem('skOranAdminUnlocked', 'true');
-      return;
-    }
-    setAdminPasswordError('Password admin tidak betul.');
-  };
-
-  const handleAdminLogout = () => {
-    setAdminUnlocked(false);
-    setAdminPasswordInput('');
-    setAdminPasswordError('');
-    sessionStorage.removeItem('skOranAdminUnlocked');
-  };
-
   const handleResetData = async (type: 'participants' | 'results' | 'all') => {
     try {
       if (type === 'participants' || type === 'all') {
@@ -212,44 +188,10 @@ function App() {
     setTimeout(() => window.location.reload(), 500);
   };
 
-  const stats: HouseStats[] = useMemo(() => {
-    const initialStats: Record<HouseColor, HouseStats> = activeHouseIds(systemConfig).reduce((acc, house) => {
-      acc[house] = { house, totalPoints: 0, gold: 0, silver: 0, bronze: 0, pointsTahap1: 0, pointsTahap2: 0 };
-      return acc;
-    }, {} as Record<HouseColor, HouseStats>);
-
-    (Object.entries(results) as [string, WinnerProfile[]][]).forEach(([key, positions]) => {
-      const parts = key.split('_');
-      const yearStr = parts[parts.length - 2];
-      const year = parseInt(yearStr);
-      const eventId = parts.slice(0, parts.length - 2).join('_');
-      const eventDef = eventById(systemConfig, eventId);
-      if (!eventDef) return;
-      const isTarikTali = eventDef.id === 'khas_tariktali';
-      if (eventDef.type === EventType.KHUSUS && !isTarikTali) {
-        positions.forEach((p) => { if (p.customScore && initialStats[p.house]) initialStats[p.house].totalPoints += p.customScore; });
-      } else {
-        const isRelay = eventDef.type === EventType.RELAY;
-        let pointSystem = pointsConfig.individu;
-        if (isRelay) pointSystem = pointsConfig.relay;
-        if (isTarikTali) pointSystem = pointsConfig.tarikTali;
-        if (Array.isArray(positions)) {
-          positions.forEach((winner, index) => {
-            const house = winner.house;
-            if (!initialStats[house]) return;
-            const points = pointSystem[index] || 0;
-            initialStats[house].totalPoints += points;
-            if (index === 0) initialStats[house].gold++;
-            if (index === 1) initialStats[house].silver++;
-            if (index === 2) initialStats[house].bronze++;
-            if (year <= 3 && year > 0) initialStats[house].pointsTahap1 += points;
-            else if (year > 3) initialStats[house].pointsTahap2 += points;
-          });
-        }
-      }
-    });
-    return Object.values(initialStats);
-  }, [results, pointsConfig, systemConfig]);
+  const stats: HouseStats[] = useMemo(
+    () => calculateHouseStats(results, pointsConfig, systemConfig),
+    [results, pointsConfig, systemConfig]
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -258,87 +200,23 @@ function App() {
         {activeTab === 'dashboard' && <Dashboard stats={stats} results={results} pointsConfig={pointsConfig} systemConfig={systemConfig}/>}
         {activeTab === 'participants' && <ParticipantList registrations={registrations} systemConfig={systemConfig}/>}
         {activeTab === 'results_list' && <ResultsList results={results} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/>}
-        {activeTab === 'settings' && !adminUnlocked && (
-          <section className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-10">
-            <div className="w-full max-w-md bg-white border border-slate-200 rounded-lg shadow-sm p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="h-12 w-12 rounded-full bg-slate-900 text-yellow-400 flex items-center justify-center">
-                  <Lock className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900">Admin Sahaja</h1>
-                  <p className="text-sm text-slate-500">Masukkan password untuk buka tetapan dan kemas kini data.</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleAdminLogin} className="space-y-4">
-                <div>
-                  <label htmlFor="admin-password" className="block text-sm font-semibold text-slate-700 mb-2">
-                    Password Admin
-                  </label>
-                  <input
-                    id="admin-password"
-                    type="password"
-                    value={adminPasswordInput}
-                    onChange={(event) => {
-                      setAdminPasswordInput(event.target.value);
-                      setAdminPasswordError('');
-                    }}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-yellow-300"
-                    autoComplete="current-password"
-                    autoFocus
-                  />
-                  {adminPasswordError && (
-                    <p className="mt-2 text-sm font-medium text-red-600">{adminPasswordError}</p>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 font-semibold text-white hover:bg-slate-800 transition-colors"
-                >
-                  <ShieldCheck className="h-5 w-5 text-yellow-400" />
-                  Masuk Admin
-                </button>
-              </form>
-            </div>
-          </section>
-        )}
-        {activeTab === 'settings' && adminUnlocked && (
-          <>
-            <div className="print:hidden bg-emerald-50 border-b border-emerald-200">
-              <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
-                  <ShieldCheck className="h-5 w-5" />
-                  Admin dibuka
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAdminLogout}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Kunci Admin
-                </button>
-              </div>
-            </div>
-            <Settings
-              pointsConfig={pointsConfig}
-              onUpdatePoints={handleUpdatePoints}
-              eventLimits={eventLimits}
-              onUpdateEventLimits={handleUpdateEventLimits}
-              systemConfig={systemConfig}
-              onUpdateSystemConfig={handleUpdateSystemConfig}
-              registrations={registrations}
-              onUpdateRegistration={handleUpdateRegistration}
-              onBulkRegistration={handleBulkRegistration}
-              onBulkOverride={handleBulkOverride}
-              results={results}
-              onSaveResult={handleSaveResult}
-              onResetData={() => handleResetData('all')}
-              stats={stats}
-            />
-          </>
+        {activeTab === 'settings' && (
+          <Settings
+            pointsConfig={pointsConfig}
+            onUpdatePoints={handleUpdatePoints}
+            eventLimits={eventLimits}
+            onUpdateEventLimits={handleUpdateEventLimits}
+            systemConfig={systemConfig}
+            onUpdateSystemConfig={handleUpdateSystemConfig}
+            registrations={registrations}
+            onUpdateRegistration={handleUpdateRegistration}
+            onBulkRegistration={handleBulkRegistration}
+            onBulkOverride={handleBulkOverride}
+            results={results}
+            onSaveResult={handleSaveResult}
+            onResetData={handleResetData}
+            stats={stats}
+          />
         )}
       </main>
     </div>

@@ -2,7 +2,8 @@ import React, { useMemo, useState, useRef } from 'react';
 import { HouseColor, Gender, EventType, WinnerProfile, HouseStats, PointsConfig, SystemConfig } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
 import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
-import { Trophy, Search, AlertCircle, User, Users, Flag, Star, Calendar, Dumbbell, Filter, ChevronDown, ChevronUp, ClipboardList, CheckCircle, Zap, Printer } from 'lucide-react';
+import { getPositionScore, scoreTitle, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
+import { Trophy, Search, AlertCircle, User, Users, Flag, Star, Calendar, Dumbbell, Filter, ChevronDown, ChevronUp, ClipboardList, CheckCircle, Zap, Printer, Medal as MedalIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ResultsListProps {
@@ -25,13 +26,54 @@ const HS: Record<HouseColor, { hex: string; glow: string; light: string; name: s
   [HouseColor.OREN]:   { hex: '#f97316', glow: 'rgba(249,115,22,0.3)', light: '#ffedd5', name: 'Oren'  },
 };
 
+const medalInfo = (medal: AthleteAwardDetail['medal']) => {
+  if (medal === 'gold') return { label: 'Emas', color: '#eab308', bg: '#fef9c3' };
+  if (medal === 'silver') return { label: 'Perak', color: '#64748b', bg: '#f1f5f9' };
+  return { label: 'Gangsa', color: '#f97316', bg: '#ffedd5' };
+};
+
+const genderLabel = (gender: Gender) => {
+  if (gender === Gender.LELAKI) return 'Lelaki';
+  if (gender === Gender.PEREMPUAN) return 'Perempuan';
+  return 'Campuran';
+};
+
+interface AthleteAwardDetail {
+  eventName: string;
+  year: number;
+  gender: Gender;
+  position: number;
+  medal: 'gold' | 'silver' | 'bronze';
+  score: number;
+}
+
+interface AthleteMedalStanding {
+  id: string;
+  name: string;
+  className: string;
+  house: HouseColor;
+  year: number;
+  gender: Gender;
+  gold: number;
+  silver: number;
+  bronze: number;
+  totalMedals: number;
+  totalPoints: number;
+  rankingScore: number;
+  awards: AthleteAwardDetail[];
+}
+
 const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsConfig, systemConfig = DEFAULT_SYSTEM_CONFIG }) => {
-  const [activeTab, setActiveTab] = useState<'keputusan'|'zonaksi'|'sukantara'>('keputusan');
+  const [activeTab, setActiveTab] = useState<'keputusan'|'jaguh'|'zonaksi'|'sukantara'>('keputusan');
   const [searchQuery, setSearchQuery]       = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('SEMUA');
   const [filterYear, setFilterYear]         = useState<string>('SEMUA');
   const [filterGender, setFilterGender]     = useState<string>('SEMUA');
   const [filterEvent, setFilterEvent]       = useState<string>('SEMUA');
+  const [jaguhYear, setJaguhYear]           = useState<string>('SEMUA');
+  const [jaguhGender, setJaguhGender]       = useState<string>('SEMUA');
+  const [jaguhHouse, setJaguhHouse]         = useState<string>('SEMUA');
+  const [expandedAthlete, setExpandedAthlete] = useState<string|null>(null);
   const [tableFilter, setTableFilter]       = useState<'semua'|'selesai'|'belum'>('semua');
   const [expandedTeams, setExpandedTeams]   = useState<Record<string, boolean>>({});
   const [expandedRow, setExpandedRow]       = useState<string|null>(null);
@@ -40,6 +82,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const [printYears, setPrintYears]         = useState<number[]>([1,2,3,4,5,6,0]);
   const [printGenders, setPrintGenders]     = useState<string[]>([Gender.LELAKI, Gender.PEREMPUAN, Gender.CAMPURAN]);
   const [printEventsFilter, setPrintEventsFilter] = useState<string[]>([]);
+  const scoringTitle = scoreTitle(systemConfig);
+  const unit = scoreUnit(systemConfig);
 
   const toggleTeam = (eventKey: string, idx: number) => {
     const key = `${eventKey}_${idx}`;
@@ -50,7 +94,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const eventsMatrix = useMemo(() => {
     const rows: Array<{
       eventName:string; category:string; year:number; gender:string;
-      points:Record<HouseColor,number>; isCompleted:boolean; winners:WinnerProfile[]; rowKey:string;
+      points:Record<HouseColor,number>; isCompleted:boolean; winners:WinnerProfile[]; rowKey:string; isScored:boolean;
     }> = [];
     const defs: any[] = [];
     activeEvents(systemConfig).forEach(e => {
@@ -63,17 +107,15 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
       const key = `${def.id}_${def.year}_${def.gender}`;
       const pos = results[key] || [];
       const rp = activeHouseIds(systemConfig).reduce((acc, house) => ({ ...acc, [house]: 0 }), {} as Record<HouseColor, number>);
-      const isTT = def.id === 'khas_tariktali';
-      if (def.type === EventType.KHUSUS && !isTT) {
-        pos.forEach((p: WinnerProfile) => { if (p.customScore && rp[p.house] !== undefined) rp[p.house] = p.customScore; });
-      } else if (pointsConfig) {
-        let s = pointsConfig.individu;
-        if (def.type === EventType.RELAY) s = pointsConfig.relay;
-        if (isTT) s = pointsConfig.tarikTali;
-        pos.forEach((p: WinnerProfile, i: number) => { const pt = s[i]||0; if (rp[p.house] !== undefined) rp[p.house] += pt; });
+      const isScored = shouldScoreEvent(def, systemConfig);
+      if (pointsConfig && isScored) {
+        pos.forEach((p: WinnerProfile, i: number) => {
+          const score = getPositionScore(def, p, i, pointsConfig, systemConfig);
+          if (rp[p.house] !== undefined) rp[p.house] += score;
+        });
       }
       const cat = def.year===0 ? 'Terbuka' : `Tahun ${def.year} • ${def.gender==='L'?'Lelaki':def.gender==='P'?'Perempuan':'Campuran'}`;
-      rows.push({ eventName:def.name, category:cat, year:def.year, gender:def.gender, points:rp, isCompleted:pos.length>0, winners:pos, rowKey:key });
+      rows.push({ eventName:def.name, category:cat, year:def.year, gender:def.gender, points:rp, isCompleted:pos.length>0, winners:pos, rowKey:key, isScored });
     });
     return rows;
   }, [results, pointsConfig, systemConfig]);
@@ -88,15 +130,15 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
         if (r.isCompleted) anyCompleted = true;
         Object.keys(r.points).forEach(h => { pts[h as HouseColor] += r.points[h as HouseColor] || 0; });
       });
-      arr.push({ eventName:'Sukantara', category:'Gabungan Semua Tahun', year:0, gender:'C', points:pts, isCompleted:anyCompleted, winners:[], rowKey:'sk_matrix_gabung' });
+      arr.push({ eventName:'Sukantara', category:'Gabungan Semua Tahun', year:0, gender:'C', points:pts, isCompleted:anyCompleted, winners:[], rowKey:'sk_matrix_gabung', isScored:allSku.some(row => row.isScored) });
     }
     if (tableFilter==='selesai') return arr.filter(r=>r.isCompleted);
     if (tableFilter==='belum')   return arr.filter(r=>!r.isCompleted);
     return arr;
   }, [eventsMatrix, tableFilter, systemConfig]);
 
-  const completedCount = eventsMatrix.filter(r=>r.isCompleted).length;
-  const totalCount     = eventsMatrix.length;
+  const completedCount = eventsMatrix.filter(r=>r.isScored && r.isCompleted).length;
+  const totalCount     = eventsMatrix.filter(r=>r.isScored).length;
   const progressPct    = totalCount>0?(completedCount/totalCount)*100:0;
 
   const allEvents = useMemo(() => {
@@ -162,7 +204,98 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     return evs.sort((a,b) => { if(a.key==='sk_gabung')return 1; if(b.key==='sk_gabung')return -1; return 0; });
   }, [allEvents, filterCategory, filterYear, filterGender, filterEvent, searchQuery]);
 
-  const houseTotals = useMemo(() => activeHouseIds(systemConfig).map(house => ({ house, total:stats.find(s=>s.house===house)?.totalPoints||0 })).sort((a,b)=>b.total-a.total), [stats, systemConfig]);
+  const availableJaguhYears = useMemo(() => {
+    const years = new Set<number>();
+    activeEvents(systemConfig).forEach(event => {
+      if (event.type === EventType.KHUSUS || !shouldScoreEvent(event, systemConfig)) return;
+      event.years.forEach(year => {
+        if (year > 0) years.add(year);
+      });
+    });
+    return Array.from(years).sort((a, b) => a - b);
+  }, [systemConfig]);
+
+  React.useEffect(() => {
+    if (jaguhYear !== 'SEMUA' && !availableJaguhYears.includes(Number(jaguhYear))) {
+      setJaguhYear('SEMUA');
+    }
+  }, [availableJaguhYears, jaguhYear]);
+
+  const athleteStandings = useMemo<AthleteMedalStanding[]>(() => {
+    const athletes: Record<string, AthleteMedalStanding> = {};
+
+    allEvents.forEach(event => {
+      if (!event.hasResults || event.eventDef?.type === EventType.KHUSUS || !shouldScoreEvent(event.eventDef, systemConfig)) return;
+
+      event.positions.forEach((winner, index) => {
+        if (!winner || index > 2) return;
+        const members = winner.teamMembers?.length
+          ? winner.teamMembers.map(member => ({ ...member, house: winner.house }))
+          : winner.name
+            ? [{ name: winner.name, className: winner.className, house: winner.house }]
+            : [];
+        const score = pointsConfig ? getPositionScore(event.eventDef, winner, index, pointsConfig, systemConfig) : 0;
+
+        members.forEach(member => {
+          const name = member.name?.trim();
+          if (!name || name.startsWith('Pasukan ') || name.startsWith('Rumah ')) return;
+
+          const id = `${event.year}_${event.gender}_${name.toLowerCase()}_${member.house}`;
+          if (!athletes[id]) {
+            athletes[id] = {
+              id,
+              name,
+              className: member.className || '-',
+              house: member.house,
+              year: event.year,
+              gender: event.gender,
+              gold: 0,
+              silver: 0,
+              bronze: 0,
+              totalMedals: 0,
+              totalPoints: 0,
+              rankingScore: 0,
+              awards: [],
+            };
+          }
+
+          if (index === 0) athletes[id].gold += 1;
+          if (index === 1) athletes[id].silver += 1;
+          if (index === 2) athletes[id].bronze += 1;
+          athletes[id].totalMedals += 1;
+          athletes[id].totalPoints += score;
+          athletes[id].rankingScore += (index === 0 ? 10000 : index === 1 ? 1000 : 100) + score;
+          athletes[id].awards.push({
+            eventName: event.name,
+            year: event.year,
+            gender: event.gender,
+            position: index + 1,
+            medal: index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze',
+            score,
+          });
+        });
+      });
+    });
+
+    return Object.values(athletes).sort((a, b) =>
+      b.gold - a.gold ||
+      b.silver - a.silver ||
+      b.bronze - a.bronze ||
+      b.totalPoints - a.totalPoints ||
+      a.name.localeCompare(b.name)
+    );
+  }, [allEvents, pointsConfig, systemConfig]);
+
+  const filteredAthletes = useMemo(() => {
+    return athleteStandings.filter(athlete => {
+      if (jaguhYear !== 'SEMUA' && athlete.year !== Number(jaguhYear)) return false;
+      if (jaguhGender !== 'SEMUA' && athlete.gender !== jaguhGender) return false;
+      if (jaguhHouse !== 'SEMUA' && athlete.house !== jaguhHouse) return false;
+      return true;
+    });
+  }, [athleteStandings, jaguhGender, jaguhHouse, jaguhYear]);
+
+  const houseTotals = useMemo(() => sortHouseStats(stats, systemConfig).map(house => ({ house: house.house, total: house.totalPoints })), [stats, systemConfig]);
   const maxTotal = houseTotals[0]?.total || 1;
 
   // ══════════════════════════════════════════════════════════════
@@ -434,9 +567,14 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
               className={`flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-bold transition-all border-b-2 ${activeTab==='keputusan'?'border-slate-900 text-slate-900 bg-white':'border-transparent text-gray-400 hover:text-gray-700 hover:bg-white/60'}`}>
               <ClipboardList className="w-4 h-4 flex-shrink-0"/><span>Senarai Keputusan</span>
             </button>
+            <button onClick={()=>setActiveTab('jaguh')}
+              className={`flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-bold transition-all border-b-2 ${activeTab==='jaguh'?'border-yellow-500 text-yellow-700 bg-white':'border-transparent text-gray-400 hover:text-gray-700 hover:bg-white/60'}`}>
+              <MedalIcon className="w-4 h-4 flex-shrink-0"/><span>Jaguh Pingat Terunggul</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black" style={{background:'rgba(234,179,8,0.12)',color:'#ca8a04',border:'1px solid rgba(234,179,8,0.28)'}}>{athleteStandings.length}</span>
+            </button>
             <button onClick={()=>setActiveTab('zonaksi')}
               className={`flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-bold transition-all border-b-2 ${activeTab==='zonaksi'?'border-yellow-500 text-yellow-700 bg-white':'border-transparent text-gray-400 hover:text-gray-700 hover:bg-white/60'}`}>
-              <Zap className="w-4 h-4 flex-shrink-0"/><span>Kutipan Mata</span>
+              <Zap className="w-4 h-4 flex-shrink-0"/><span>{scoringTitle}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black" style={{background:'rgba(34,197,94,0.1)',color:'#16a34a',border:'1px solid rgba(34,197,94,0.25)'}}>{completedCount}/{totalCount}</span>
             </button>
             <button onClick={()=>setActiveTab('sukantara')}
@@ -562,6 +700,128 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
           </>
         )}
 
+        {/* TAB: JAGUH PINGAT TERUNGGUL */}
+        {activeTab==='jaguh'&&(
+          <div className="bg-gray-50 min-h-[600px]">
+            <div className="p-4 lg:p-6 border-b border-gray-200 bg-slate-950 text-white">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-yellow-400 p-2 rounded-xl text-slate-950 shrink-0"><MedalIcon className="w-6 h-6"/></div>
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black">Jaguh Pingat Terunggul</h2>
+                    <p className="text-slate-400 text-xs md:text-sm">Ranking atlet berdasarkan emas, perak, gangsa dan acara yang dimenangi.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
+                  <select value={jaguhYear} onChange={e=>setJaguhYear(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                    <option value="SEMUA">Semua Tahun</option>
+                    {availableJaguhYears.map(year => <option key={year} value={year}>Tahun {year}</option>)}
+                  </select>
+                  <select value={jaguhGender} onChange={e=>setJaguhGender(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                    <option value="SEMUA">Semua Jantina</option>
+                    <option value={Gender.LELAKI}>Lelaki</option>
+                    <option value={Gender.PEREMPUAN}>Perempuan</option>
+                  </select>
+                  <select value={jaguhHouse} onChange={e=>setJaguhHouse(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                    <option value="SEMUA">Semua Rumah</option>
+                    {activeHouseIds(systemConfig).map(house => <option key={house} value={house}>{getHouseName(systemConfig, house)}</option>)}
+                  </select>
+                </div>
+              </div>
+              {availableJaguhYears.length === 0 && (
+                <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm font-bold text-amber-100">
+                  Tiada tab tahun dipaparkan kerana tiada acara aktif untuk kategori murid.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 lg:p-6">
+              {filteredAthletes.length === 0 ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-400 shadow-sm">
+                  <MedalIcon className="w-14 h-14 mx-auto mb-3 opacity-30"/>
+                  <p className="font-bold">Tiada jaguh pingat untuk pilihan ini lagi.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {filteredAthletes.map((athlete, index) => {
+                    const houseStyle = HS[athlete.house];
+                    const isExpanded = expandedAthlete === athlete.id;
+                    return (
+                      <div key={athlete.id} className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{borderColor:`${houseStyle.hex}33`}}>
+                        <button type="button" onClick={()=>setExpandedAthlete(isExpanded ? null : athlete.id)}
+                          className="w-full p-4 text-left transition-colors hover:bg-slate-50">
+                          <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3">
+                            <div className="h-12 w-12 rounded-xl flex items-center justify-center text-xl font-black text-white shadow-sm" style={{background:houseStyle.hex}}>
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="truncate text-base md:text-lg font-black text-gray-900 uppercase">{athlete.name}</div>
+                                  <div className="text-xs font-black uppercase tracking-wide" style={{color:houseStyle.hex}}>
+                                    {getHouseName(systemConfig, athlete.house)} - Tahun {athlete.year} - {genderLabel(athlete.gender)} - {athlete.className || '-'}
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 shrink-0">
+                                  {([
+                                    ['gold', athlete.gold],
+                                    ['silver', athlete.silver],
+                                    ['bronze', athlete.bronze],
+                                  ] as const).map(([medal, value]) => {
+                                    const meta = medalInfo(medal);
+                                    return (
+                                      <span key={medal} className="inline-flex min-w-[48px] items-center justify-center gap-1 rounded-lg border px-2 py-1 text-xs font-black"
+                                        style={{borderColor:`${meta.color}55`, background:meta.bg, color:meta.color}}>
+                                        <MedalIcon className="w-3.5 h-3.5"/>{value}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-gray-500">
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1">{athlete.totalMedals} pingat</span>
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1">{athlete.totalPoints} {unit}</span>
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1">{athlete.awards.length} acara</span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-gray-100 bg-slate-50 p-4">
+                            <div className="mb-3 text-xs font-black uppercase tracking-widest text-gray-500">Acara yang dimenangi</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {athlete.awards.map((award, awardIndex) => {
+                                const meta = medalInfo(award.medal);
+                                return (
+                                  <div key={`${award.eventName}-${awardIndex}`} className="rounded-xl border border-gray-200 bg-white p-3 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-black text-gray-900">{award.eventName}</div>
+                                      <div className="text-[11px] font-bold text-gray-500">
+                                        Tahun {award.year} - {genderLabel(award.gender)} - Tempat ke-{award.position}
+                                      </div>
+                                    </div>
+                                    <div className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-black shrink-0"
+                                      style={{borderColor:`${meta.color}55`, background:meta.bg, color:meta.color}}>
+                                      <MedalIcon className="w-4 h-4"/>{meta.label}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ══ TAB 2: KUTIPAN MATA ══ */}
         {activeTab==='zonaksi'&&(
           <div className="bg-gray-50 min-h-[600px]">
@@ -570,7 +830,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                 <div className="flex items-center gap-3 flex-1">
                   <div className="p-2 rounded-xl bg-yellow-50 border border-yellow-200 flex-shrink-0"><Zap className="w-5 h-5 text-yellow-600"/></div>
                   <div>
-                    <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">Kutipan Mata Rumah Sukan</h3>
+                    <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">{scoringTitle} Rumah Sukan</h3>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-sm font-bold text-gray-700">{completedCount}<span className="text-gray-400">/{totalCount}</span> selesai</span>
                       <div className="w-24 h-2 rounded-full bg-gray-200 overflow-hidden">
@@ -739,11 +999,11 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                     <tfoot className="sticky bottom-0 z-20">
                       <tr className="bg-gray-900 border-t-2 border-gray-700">
                         <td className="px-4 py-4 sticky left-0 z-10 bg-gray-900" colSpan={3} style={{boxShadow:'4px 0 8px rgba(0,0,0,0.3)'}}>
-                          <span className="text-base font-black text-yellow-400 uppercase tracking-widest">Jumlah Mata</span>
+                          <span className="text-base font-black text-yellow-400 uppercase tracking-widest">Jumlah {unit}</span>
                         </td>
                         {activeHouseIds(systemConfig).map(house=>{
                           const total=stats.find(s=>s.house===house)?.totalPoints||0; const s=HS[house];
-                          const isTop=stats.length>0&&total>0&&total===Math.max(...stats.map(x=>x.totalPoints));
+                          const isTop=houseTotals[0]?.house===house&&total>0;
                           return (
                             <td key={house} className="py-3 text-center" style={{width:'60px',minWidth:'60px'}}>
                               <div className="inline-flex flex-col items-center gap-0.5">
