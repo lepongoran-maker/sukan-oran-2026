@@ -40,7 +40,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
   const [filterEvent, setFilterEvent] = useState<string>('SEMUA');
 
   // Print settings
-  const [printYears, setPrintYears] = useState<number[]>([8,10,12,0]);
+  const [printYears, setPrintYears] = useState<number[]>([8,10,12,99,0]);
   const [printGenders, setPrintGenders] = useState<string[]>([Gender.LELAKI, Gender.PEREMPUAN, Gender.CAMPURAN]);
   const [printEventsFilter, setPrintEventsFilter] = useState<string[]>([]);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -330,7 +330,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
               <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
               <select className="pl-10 w-full bg-slate-700 text-white text-sm border-slate-600 rounded p-2 appearance-none" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
                 <option value="SEMUA">Semua Kategori</option>
-                {[8,10,12,0].map(y => <option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
+                {[8,10,12,99,0].map(y => <option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
               </select>
             </div>
             <div className="relative">
@@ -451,13 +451,13 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">📅 TAHUN</label>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setPrintYears([8,10,12,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
+                      <button type="button" onClick={() => setPrintYears([8,10,12,99,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
                       <span className="text-gray-300 text-[10px]">|</span>
                       <button type="button" onClick={() => setPrintYears([])} className="text-[10px] text-red-600 font-bold hover:underline">Kosongkan</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {[8,10,12,0].map(y => (
+                    {[8,10,12,99,0].map(y => (
                       <label key={y} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors border border-gray-100 hover:border-gray-200 shadow-sm bg-white">
                         <input 
                           type="checkbox"

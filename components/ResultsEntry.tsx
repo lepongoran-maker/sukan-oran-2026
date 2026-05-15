@@ -73,8 +73,8 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
   const filteredRaces = useMemo(() => {
     return allRaces.filter(race => {
       const isKhas = race.type === EventType.KHUSUS;
-      if (filterCategory==='TAHAP 1') { if (race.eventName.includes('Tahap 2')) return false; if (!isKhas && ![1,2,3,8].includes(race.year)) return false; }
-      if (filterCategory==='TAHAP 2') { if (race.eventName.includes('Tahap 1')) return false; if (!isKhas && ![4,5,6,10,12].includes(race.year)) return false; }
+      if (filterCategory==='TAHAP 1') { if (race.eventName.includes('Tahap 2')) return false; if (!isKhas && ![1,2,3,8,99].includes(race.year)) return false; }
+      if (filterCategory==='TAHAP 2') { if (race.eventName.includes('Tahap 1')) return false; if (!isKhas && ![4,5,6,10,12,99].includes(race.year)) return false; }
       if (filterYear!=='SEMUA' && race.year!==parseInt(filterYear)) return false;
       if (filterGender!=='SEMUA' && race.gender!==filterGender && race.gender!==Gender.CAMPURAN) return false;
       if (filterEvent!=='SEMUA' && race.eventName!==filterEvent) return false;
@@ -130,7 +130,7 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
             </select>
             <select className="rounded-md border-gray-300 shadow-sm border p-2 bg-white text-sm" value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
               <option value="SEMUA">Semua Kategori</option>
-              {[8,10,12,0].map(y=>(<option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>))}
+              {[8,10,12,99,0].map(y=>(<option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>))}
             </select>
           </div>
         </div>

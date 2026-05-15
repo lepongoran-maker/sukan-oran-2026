@@ -34,7 +34,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, stud
         groups.set(group.key, group);
       });
 
-    const order = [8, 10, 12, 0];
+    const order = [8, 10, 12, 99, 0];
     return Array.from(groups.values()).sort((a, b) => {
       const aIndex = order.indexOf(a.key);
       const bIndex = order.indexOf(b.key);

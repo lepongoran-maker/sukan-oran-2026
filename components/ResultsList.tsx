@@ -86,7 +86,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const [expandedRow, setExpandedRow]       = useState<string|null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printGroup, setPrintGroup]         = useState<'acara'|'tahun'|'rumah'>('acara');
-  const [printYears, setPrintYears]         = useState<number[]>([8,10,12,0]);
+  const [printYears, setPrintYears]         = useState<number[]>([8,10,12,99,0]);
   const [printGenders, setPrintGenders]     = useState<string[]>([Gender.LELAKI, Gender.PEREMPUAN, Gender.CAMPURAN]);
   const [printEventsFilter, setPrintEventsFilter] = useState<string[]>([]);
   const scoringTitle = scoreTitle(systemConfig);
@@ -184,8 +184,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const filteredEvents = useMemo(() => {
     const baseList = allEvents.filter(item => {
       const isKhas = item.eventDef?.type === EventType.KHUSUS;
-      if (filterCategory==='TAHAP 1') { if(item.name.includes('Tahap 2'))return false; if(!isKhas&&![1,2,3,8].includes(item.year))return false; }
-      if (filterCategory==='TAHAP 2') { if(item.name.includes('Tahap 1'))return false; if(!isKhas&&![4,5,6,10,12].includes(item.year))return false; }
+      if (filterCategory==='TAHAP 1') { if(item.name.includes('Tahap 2'))return false; if(!isKhas&&![1,2,3,8,99].includes(item.year))return false; }
+      if (filterCategory==='TAHAP 2') { if(item.name.includes('Tahap 1'))return false; if(!isKhas&&![4,5,6,10,12,99].includes(item.year))return false; }
       if (filterYear!=='SEMUA'&&item.year!==parseInt(filterYear)) return false;
       if (filterGender!=='SEMUA'&&item.gender!==filterGender) return false;
       if (filterEvent!=='SEMUA') {
@@ -402,7 +402,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
         if (!byYear[k]) byYear[k]=[];
         byYear[k].push(e);
       });
-      const yearOrder = ['Bawah 8','Bawah 10','Bawah 12','Terbuka / Khas'];
+      const yearOrder = ['Bawah 8','Bawah 10','Bawah 12','Terbuka Murid','Terbuka / Khas'];
       bodyHTML = yearOrder.filter(k=>byYear[k]).map((k, gi) => `
         <div style="${gi>0?'page-break-before:always;':''}">
           ${pageHeader}
@@ -466,13 +466,13 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">📅 TAHUN</label>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setPrintYears([8,10,12,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
+                      <button type="button" onClick={() => setPrintYears([8,10,12,99,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
                       <span className="text-gray-300 text-[10px]">|</span>
                       <button type="button" onClick={() => setPrintYears([])} className="text-[10px] text-red-600 font-bold hover:underline">Kosongkan</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {[8,10,12,0].map(y => (
+                    {[8,10,12,99,0].map(y => (
                       <label key={y} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors border border-gray-100 hover:border-gray-200 shadow-sm bg-white">
                         <input
                           type="checkbox"
@@ -624,7 +624,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                 </div>
                 <div className="relative"><Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none"/>
                   <select className="pl-10 w-full bg-slate-700 text-white text-sm border-slate-600 rounded p-2 appearance-none" value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
-                    <option value="SEMUA">Semua Kategori</option>{[8,10,12,0].map(y=><option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
+                    <option value="SEMUA">Semua Kategori</option>{[8,10,12,99,0].map(y=><option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
                   </select>
                 </div>
                 <div className="relative"><Users className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none"/>
@@ -903,6 +903,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                       {[
                         {label:'Kategori Bawah 8',emoji:'📋',filter:(r:any)=>r.year===8,color:'#3b82f6',bg:'#eff6ff'},
                         {label:'Kategori Bawah 10 & 12',emoji:'📋',filter:(r:any)=>[10,12].includes(r.year),color:'#8b5cf6',bg:'#f5f3ff'},
+                        {label:'Terbuka Murid',emoji:'📋',filter:(r:any)=>r.year===99,color:'#06b6d4',bg:'#ecfeff'},
                         {label:'Acara Terbuka / Khas',   emoji:'🏆',filter:(r:any)=>r.year===0,          color:'#f59e0b',bg:'#fffbeb'},
                       ].map(group=>{
                         const groupRows=filteredMatrix.filter(group.filter);

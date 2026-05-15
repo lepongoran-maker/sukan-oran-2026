@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Save, Settings as SettingsIcon, RotateCcw, Award, Users, Anchor, ClipboardList, Trophy, LayoutGrid, FileSpreadsheet, Trash2, Database, AlertTriangle, ShieldAlert, Download, Printer, KeyRound, LogOut } from 'lucide-react';
 import { AccessConfig, AccessSession, PointsConfig, Participant, WinnerProfile, HouseColor, Gender, EventLimitsConfig, EventType, HouseStats, SystemConfig, EventSettings, StudentRosterEntry } from '../types';
 import { POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI, HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG, DEFAULT_ACCESS_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName, normalizeSystemConfig } from '../utils/systemConfig';
+import {
+  activeEvents,
+  activeHouseIds,
+  formatCompetitionGroupLabel,
+  getEventCompetitionGroup,
+  getHouseName,
+  normalizeSystemConfig,
+} from '../utils/systemConfig';
 import RegistrationForm from './RegistrationForm';
 import ResultsEntry from './ResultsEntry';
 import CsvImport from './CsvImport';
@@ -1124,7 +1131,9 @@ const Settings: React.FC<SettingsProps> = ({
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                   <div>
                     <h3 className="text-lg font-black text-gray-900">Senarai Acara Dipertandingkan</h3>
-                    <p className="text-sm text-gray-500">Tick tahun yang terlibat untuk setiap acara. Pilih <code>Terbuka</code> untuk acara kategori umum.</p>
+                    <p className="text-sm text-gray-500">
+                      Tick tahun yang terlibat untuk setiap acara. Tahun 1+2 jadi <b>Bawah 8</b>, 3+4 jadi <b>Bawah 10</b>, 5+6 jadi <b>Bawah 12</b>, dan Tahun 1-6 jadi <b>Terbuka Murid</b>.
+                    </p>
                   </div>
                   <button onClick={handleAddEvent} className="px-4 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-slate-800">
                     + Tambah Acara
@@ -1191,7 +1200,12 @@ const Settings: React.FC<SettingsProps> = ({
                         </div>
                       </div>
                       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <div className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">Tahun Terlibat</div>
+                        <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-xs font-black uppercase tracking-wide text-gray-500">Tahun Terlibat</div>
+                          <div className="rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-blue-700 ring-1 ring-blue-100">
+                            Paparan: {formatCompetitionGroupLabel(getEventCompetitionGroup(event))}
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                           {[1, 2, 3, 4, 5, 6, 0].map(year => {
                             const checked = event.years.includes(year);

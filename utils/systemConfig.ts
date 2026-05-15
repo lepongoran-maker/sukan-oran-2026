@@ -7,6 +7,9 @@ export interface CompetitionGroup {
   years: number[];
 }
 
+export const STUDENT_OPEN_GROUP_KEY = 99;
+export const STUDENT_OPEN_YEARS = [1, 2, 3, 4, 5, 6];
+
 export const normalizeSystemConfig = (config?: Partial<SystemConfig> | null): SystemConfig => {
   const houseOverrides = new Map((config?.houses || []).map(house => [house.id, house]));
   const eventOverrides = new Map((config?.events || []).map(event => [event.id, event]));
@@ -76,6 +79,10 @@ export const getCompetitionGroupForYears = (years: number[] = []): CompetitionGr
   const isSameYears = (expected: number[]) =>
     positiveYears.length === expected.length && expected.every(year => positiveYears.includes(year));
 
+  if (isSameYears(STUDENT_OPEN_YEARS)) {
+    return { key: STUDENT_OPEN_GROUP_KEY, label: 'Terbuka Murid', years: STUDENT_OPEN_YEARS };
+  }
+
   if (isSameYears([1, 2])) return { key: 8, label: 'Bawah 8', years: [1, 2] };
   if (isSameYears([3, 4])) return { key: 10, label: 'Bawah 10', years: [3, 4] };
   if (isSameYears([5, 6])) return { key: 12, label: 'Bawah 12', years: [5, 6] };
@@ -102,6 +109,7 @@ export const formatCompetitionGroupLabel = (groupOrYear: number | CompetitionGro
   if (groupOrYear === 8) return 'Bawah 8';
   if (groupOrYear === 10) return 'Bawah 10';
   if (groupOrYear === 12) return 'Bawah 12';
+  if (groupOrYear === STUDENT_OPEN_GROUP_KEY) return 'Terbuka Murid';
   return `Tahun ${groupOrYear}`;
 };
 

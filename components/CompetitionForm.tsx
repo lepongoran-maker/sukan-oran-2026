@@ -1078,6 +1078,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
               {[
                 {label:'BAWAH 8', years:[8], color:'#3b82f6'},
                 {label:'BAWAH 10 / 12', years:[10,12], color:'#8b5cf6'},
+                {label:'TERBUKA MURID', years:[99], color:'#06b6d4'},
               ].map(tahap => {
                 const tahapG = groupedData.filter(g => tahap.years.includes(g.year));
                 if (!tahapG.length) return null;
@@ -1186,6 +1187,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
               {[
                 {label:'BAWAH 8', years:[8], color:'#3b82f6'},
                 {label:'BAWAH 10 / 12', years:[10,12], color:'#8b5cf6'},
+                {label:'TERBUKA MURID', years:[99], color:'#06b6d4'},
               ].map(tahap => {
                 const tahapG = groupedData.filter(g => tahap.years.includes(g.year));
                 if (!tahapG.length) return null;
@@ -1295,6 +1297,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
           {[
             { label: 'BAWAH 8', years: [8], color: '#3b82f6' },
             { label: 'BAWAH 10 / 12', years: [10,12], color: '#8b5cf6' },
+            { label: 'TERBUKA MURID', years: [99], color: '#06b6d4' },
           ].map(tahap => {
             const tahapEvents = groupedData.filter(g => tahap.years.includes(g.year));
             if (tahapEvents.length === 0) return null;
