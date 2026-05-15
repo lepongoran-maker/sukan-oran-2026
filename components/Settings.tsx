@@ -578,6 +578,18 @@ const Settings: React.FC<SettingsProps> = ({
     setIsSystemConfigSaved(false);
   };
 
+  const handleCompetitionDateTimeChange = (field: 'date' | 'time', value: string) => {
+    setLocalSystemConfig(prev => {
+      const current = prev.competitionDateTime || DEFAULT_SYSTEM_CONFIG.competitionDateTime || '2026-05-09T07:00';
+      const [datePart, timePart = '07:00'] = current.split('T');
+      return {
+        ...prev,
+        competitionDateTime: field === 'date' ? `${value}T${timePart}` : `${datePart}T${value}`,
+      };
+    });
+    setIsSystemConfigSaved(false);
+  };
+
   const handleEventChange = (eventId: string, patch: Partial<EventSettings>) => {
     setLocalSystemConfig(prev => ({
       ...prev,
@@ -586,12 +598,18 @@ const Settings: React.FC<SettingsProps> = ({
     setIsSystemConfigSaved(false);
   };
 
-  const handleEventYearsChange = (eventId: string, yearsText: string) => {
-    const years = yearsText
-      .split(',')
-      .map(value => parseInt(value.trim()))
-      .filter(value => !Number.isNaN(value) && value >= 0 && value <= 6);
-    handleEventChange(eventId, { years: Array.from(new Set(years)) });
+  const handleEventYearToggle = (eventId: string, year: number, checked: boolean) => {
+    setLocalSystemConfig(prev => ({
+      ...prev,
+      events: prev.events.map(event => {
+        if (event.id !== eventId) return event;
+        const years = new Set<number>(event.years || []);
+        if (checked) years.add(year);
+        else years.delete(year);
+        return { ...event, years: Array.from(years).sort((a, b) => a - b) };
+      }),
+    }));
+    setIsSystemConfigSaved(false);
   };
 
   const handleAddEvent = () => {
@@ -1038,6 +1056,33 @@ const Settings: React.FC<SettingsProps> = ({
               </div>
 
               <div className="p-6 bg-white border-b border-gray-200">
+                <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-lg font-black text-blue-950">Tarikh & Masa Kejohanan</h3>
+                    <p className="text-sm text-blue-800">Tetapan ini digunakan untuk countdown di dashboard utama.</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-bold text-gray-700 mb-2 block">Tarikh Hari Kejohanan</label>
+                      <input
+                        type="date"
+                        value={(localSystemConfig.competitionDateTime || DEFAULT_SYSTEM_CONFIG.competitionDateTime || '2026-05-09T07:00').split('T')[0]}
+                        onChange={e=>handleCompetitionDateTimeChange('date', e.target.value)}
+                        className="w-full border border-blue-200 rounded-lg p-3 text-base font-bold focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-gray-700 mb-2 block">Masa Mula Kejohanan</label>
+                      <input
+                        type="time"
+                        value={(localSystemConfig.competitionDateTime || DEFAULT_SYSTEM_CONFIG.competitionDateTime || '2026-05-09T07:00').split('T')[1]?.slice(0,5) || '07:00'}
+                        onChange={e=>handleCompetitionDateTimeChange('time', e.target.value)}
+                        className="w-full border border-blue-200 rounded-lg p-3 text-base font-bold focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-col md:flex-row md:items-end gap-6 mb-6">
                   <div className="w-full md:w-64">
                     <label className="text-sm font-bold text-gray-700 mb-2 block">Bilangan Rumah Sukan Aktif</label>
@@ -1079,7 +1124,7 @@ const Settings: React.FC<SettingsProps> = ({
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                   <div>
                     <h3 className="text-lg font-black text-gray-900">Senarai Acara Dipertandingkan</h3>
-                    <p className="text-sm text-gray-500">Tahun guna nombor dipisahkan koma. Contoh: <code>1,2,3</code> atau <code>0</code> untuk terbuka.</p>
+                    <p className="text-sm text-gray-500">Tick tahun yang terlibat untuk setiap acara. Pilih <code>Terbuka</code> untuk acara kategori umum.</p>
                   </div>
                   <button onClick={handleAddEvent} className="px-4 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-slate-800">
                     + Tambah Acara
@@ -1106,7 +1151,7 @@ const Settings: React.FC<SettingsProps> = ({
                           <input type="checkbox" checked={event.active} onChange={e=>handleEventChange(event.id,{active:e.target.checked})}/>
                           Aktif
                         </label>
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-4 xl:col-span-3">
                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Nama Acara</label>
                           <input type="text" value={event.name} onChange={e=>handleEventChange(event.id,{name:e.target.value})}
                             className="w-full border border-gray-300 rounded-lg p-2 text-sm font-semibold"/>
@@ -1129,11 +1174,6 @@ const Settings: React.FC<SettingsProps> = ({
                             <option value="TERBUKA">Terbuka</option>
                           </select>
                         </div>
-                        <div className="md:col-span-2">
-                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Tahun</label>
-                          <input type="text" value={event.years.join(',')} onChange={e=>handleEventYearsChange(event.id,e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-2 text-sm font-semibold"/>
-                        </div>
                         <div className="md:col-span-1">
                           <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Atlet / Rumah</label>
                           <input type="number" min="0" value={event.maxParticipants} onChange={e=>handleEventChange(event.id,{maxParticipants:parseInt(e.target.value)||0})}
@@ -1148,6 +1188,32 @@ const Settings: React.FC<SettingsProps> = ({
                             <Trash2 className="w-4 h-4"/>
                             Buang
                           </button>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">Tahun Terlibat</div>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                          {[1, 2, 3, 4, 5, 6, 0].map(year => {
+                            const checked = event.years.includes(year);
+                            return (
+                              <label
+                                key={`${event.id}-${year}`}
+                                className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black transition-all ${
+                                  checked
+                                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={e=>handleEventYearToggle(event.id, year, e.target.checked)}
+                                  className="sr-only"
+                                />
+                                {year === 0 ? 'Terbuka' : `Tahun ${year}`}
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>

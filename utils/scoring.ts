@@ -87,7 +87,7 @@ export const calculateHouseStats = (
       if (index === 0) initialStats[house].gold += 1;
       if (index === 1) initialStats[house].silver += 1;
       if (index === 2) initialStats[house].bronze += 1;
-      if (year <= 3 && year > 0) initialStats[house].pointsTahap1 += score;
+      if ((year <= 3 && year > 0) || year === 8) initialStats[house].pointsTahap1 += score;
       else if (year > 3) initialStats[house].pointsTahap2 += score;
     });
   });

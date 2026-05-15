@@ -1,7 +1,14 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { HouseColor, Gender, EventType, WinnerProfile, HouseStats, PointsConfig, SystemConfig } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
+import {
+  activeEvents,
+  activeHouseIds,
+  formatCompetitionGroupLabel,
+  getEventCompetitionGroup,
+  getEventGenders,
+  getHouseName,
+} from '../utils/systemConfig';
 import { getPositionScore, scoreTitle, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
 import { Trophy, Search, AlertCircle, User, Users, Flag, Star, Calendar, Dumbbell, Filter, ChevronDown, ChevronUp, ClipboardList, CheckCircle, Zap, Printer, Medal as MedalIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -79,7 +86,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const [expandedRow, setExpandedRow]       = useState<string|null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printGroup, setPrintGroup]         = useState<'acara'|'tahun'|'rumah'>('acara');
-  const [printYears, setPrintYears]         = useState<number[]>([1,2,3,4,5,6,0]);
+  const [printYears, setPrintYears]         = useState<number[]>([8,10,12,0]);
   const [printGenders, setPrintGenders]     = useState<string[]>([Gender.LELAKI, Gender.PEREMPUAN, Gender.CAMPURAN]);
   const [printEventsFilter, setPrintEventsFilter] = useState<string[]>([]);
   const scoringTitle = scoreTitle(systemConfig);
@@ -98,10 +105,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     }> = [];
     const defs: any[] = [];
     activeEvents(systemConfig).forEach(e => {
-      e.years.forEach(year => {
-        const genders = year === 0 ? [Gender.CAMPURAN] : [Gender.LELAKI, Gender.PEREMPUAN];
-        genders.forEach(gender => defs.push({...e, year, gender}));
-      });
+      const group = getEventCompetitionGroup(e);
+      getEventGenders(e).forEach(gender => defs.push({...e, year: group.key, gender}));
     });
     defs.forEach(def => {
       const key = `${def.id}_${def.year}_${def.gender}`;
@@ -114,7 +119,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
           if (rp[p.house] !== undefined) rp[p.house] += score;
         });
       }
-      const cat = def.year===0 ? 'Terbuka' : `Tahun ${def.year} • ${def.gender==='L'?'Lelaki':def.gender==='P'?'Perempuan':'Campuran'}`;
+      const cat = `${formatCompetitionGroupLabel(def.year)} • ${def.gender==='L'?'Lelaki':def.gender==='P'?'Perempuan':'Campuran'}`;
       rows.push({ eventName:def.name, category:cat, year:def.year, gender:def.gender, points:rp, isCompleted:pos.length>0, winners:pos, rowKey:key, isScored });
     });
     return rows;
@@ -152,10 +157,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
       events.push({ key, name:eventDef.name, year, gender, positions:displayPositions, eventDef, isManualScore, hasResults:positions.length>0 });
     };
     activeEvents(systemConfig).forEach(e => {
-      e.years.forEach(year => {
-        const genders = year === 0 ? [Gender.CAMPURAN] : [Gender.LELAKI, Gender.PEREMPUAN];
-        genders.forEach(gender => addEvent(e, year, gender));
-      });
+      const group = getEventCompetitionGroup(e);
+      getEventGenders(e).forEach(gender => addEvent(e, group.key, gender));
     });
     return events.sort((a,b) => { if(a.year!==b.year) return a.year-b.year; if(a.gender!==b.gender) return a.gender.localeCompare(b.gender); return a.name.localeCompare(b.name); });
   }, [results, systemConfig]);
@@ -181,15 +184,15 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
   const filteredEvents = useMemo(() => {
     const baseList = allEvents.filter(item => {
       const isKhas = item.eventDef?.type === EventType.KHUSUS;
-      if (filterCategory==='TAHAP 1') { if(item.name.includes('Tahap 2'))return false; if(!isKhas&&item.year>3)return false; }
-      if (filterCategory==='TAHAP 2') { if(item.name.includes('Tahap 1'))return false; if(!isKhas&&item.year<=3)return false; }
+      if (filterCategory==='TAHAP 1') { if(item.name.includes('Tahap 2'))return false; if(!isKhas&&![1,2,3,8].includes(item.year))return false; }
+      if (filterCategory==='TAHAP 2') { if(item.name.includes('Tahap 1'))return false; if(!isKhas&&![4,5,6,10,12].includes(item.year))return false; }
       if (filterYear!=='SEMUA'&&item.year!==parseInt(filterYear)) return false;
       if (filterGender!=='SEMUA'&&item.gender!==filterGender) return false;
       if (filterEvent!=='SEMUA') {
         if (filterEvent==='Sukantara') { if (!item.name.toLowerCase().includes('sukantara')) return false; }
         else { if (item.name!==filterEvent) return false; }
       }
-      if (searchQuery) { const s=`${item.name} Tahun ${item.year} ${item.gender}`.toLowerCase(); return s.includes(searchQuery.toLowerCase()); }
+      if (searchQuery) { const s=`${item.name} ${formatCompetitionGroupLabel(item.year)} ${item.gender}`.toLowerCase(); return s.includes(searchQuery.toLowerCase()); }
       return true;
     });
     let evs = baseList.filter(r => !r.name.toLowerCase().includes('sukantara'));
@@ -208,9 +211,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     const years = new Set<number>();
     activeEvents(systemConfig).forEach(event => {
       if (event.type === EventType.KHUSUS || !shouldScoreEvent(event, systemConfig)) return;
-      event.years.forEach(year => {
-        if (year > 0) years.add(year);
-      });
+      const group = getEventCompetitionGroup(event);
+      if (group.key > 0) years.add(group.key);
     });
     return Array.from(years).sort((a, b) => a - b);
   }, [systemConfig]);
@@ -318,7 +320,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     const buildEventBlock = (event: typeof eventsToP[0]) => {
       const isRelay = event.eventDef?.type === EventType.RELAY;
       const gLabel  = event.gender===Gender.LELAKI?'Lelaki':event.gender===Gender.PEREMPUAN?'Perempuan':'Campuran';
-      const yLabel  = event.year===0?'Terbuka':`Tahun ${event.year}`;
+      const yLabel  = formatCompetitionGroupLabel(event.year);
 
       const rows = event.positions.slice(0, 6).map((w, i) => {
         const members = isRelay && w.teamMembers?.length
@@ -396,11 +398,11 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     } else if (printGroup === 'tahun') {
       const byYear: Record<string, typeof eventsToP> = {};
       eventsToP.forEach(e => {
-        const k = e.year===0?'Terbuka / Khas':`Tahun ${e.year}`;
+        const k = e.year===0?'Terbuka / Khas':formatCompetitionGroupLabel(e.year);
         if (!byYear[k]) byYear[k]=[];
         byYear[k].push(e);
       });
-      const yearOrder = ['Tahun 1','Tahun 2','Tahun 3','Tahun 4','Tahun 5','Tahun 6','Terbuka / Khas'];
+      const yearOrder = ['Bawah 8','Bawah 10','Bawah 12','Terbuka / Khas'];
       bodyHTML = yearOrder.filter(k=>byYear[k]).map((k, gi) => `
         <div style="${gi>0?'page-break-before:always;':''}">
           ${pageHeader}
@@ -464,13 +466,13 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">📅 TAHUN</label>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setPrintYears([1,2,3,4,5,6,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
+                      <button type="button" onClick={() => setPrintYears([8,10,12,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
                       <span className="text-gray-300 text-[10px]">|</span>
                       <button type="button" onClick={() => setPrintYears([])} className="text-[10px] text-red-600 font-bold hover:underline">Kosongkan</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {[1,2,3,4,5,6,0].map(y => (
+                    {[8,10,12,0].map(y => (
                       <label key={y} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors border border-gray-100 hover:border-gray-200 shadow-sm bg-white">
                         <input
                           type="checkbox"
@@ -481,7 +483,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                           }}
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
                         />
-                        <span className="text-xs font-bold text-gray-700 leading-tight">{y===0?'Terbuka':`Tahun ${y}`}</span>
+                        <span className="text-xs font-bold text-gray-700 leading-tight">{formatCompetitionGroupLabel(y)}</span>
                       </label>
                     ))}
                   </div>
@@ -622,7 +624,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                 </div>
                 <div className="relative"><Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none"/>
                   <select className="pl-10 w-full bg-slate-700 text-white text-sm border-slate-600 rounded p-2 appearance-none" value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
-                    <option value="SEMUA">Semua Tahun</option>{[1,2,3,4,5,6].map(y=><option key={y} value={y}>Tahun {y}</option>)}
+                    <option value="SEMUA">Semua Kategori</option>{[8,10,12,0].map(y=><option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
                   </select>
                 </div>
                 <div className="relative"><Users className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none"/>
@@ -650,7 +652,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">{event.name}{event.eventDef?.type===EventType.KHUSUS&&<Flag className="w-4 h-4 text-orange-600"/>}</h3>
                           <span className="text-sm font-medium text-gray-600 uppercase tracking-wide">
-                            {event.year===0?'Kategori Terbuka':`Tahun ${event.year}`} • {event.gender===Gender.LELAKI?' Lelaki':event.gender===Gender.PEREMPUAN?' Perempuan':' Campuran'}
+                            {event.year===0?'Kategori Terbuka':formatCompetitionGroupLabel(event.year)} • {event.gender===Gender.LELAKI?' Lelaki':event.gender===Gender.PEREMPUAN?' Perempuan':' Campuran'}
                           </span>
                         </div>
                         {event.eventDef?.type===EventType.RELAY&&<span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold flex items-center gap-1"><Users className="w-3 h-3"/>RELAY</span>}
@@ -715,8 +717,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
                   <select value={jaguhYear} onChange={e=>setJaguhYear(e.target.value)}
                     className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
-                    <option value="SEMUA">Semua Tahun</option>
-                    {availableJaguhYears.map(year => <option key={year} value={year}>Tahun {year}</option>)}
+                    <option value="SEMUA">Semua Kategori</option>
+                    {availableJaguhYears.map(year => <option key={year} value={year}>{formatCompetitionGroupLabel(year)}</option>)}
                   </select>
                   <select value={jaguhGender} onChange={e=>setJaguhGender(e.target.value)}
                     className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
@@ -762,7 +764,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                                 <div className="min-w-0">
                                   <div className="truncate text-base md:text-lg font-black text-gray-900 uppercase">{athlete.name}</div>
                                   <div className="text-xs font-black uppercase tracking-wide" style={{color:houseStyle.hex}}>
-                                    {getHouseName(systemConfig, athlete.house)} - Tahun {athlete.year} - {genderLabel(athlete.gender)} - {athlete.className || '-'}
+                                    {getHouseName(systemConfig, athlete.house)} - {formatCompetitionGroupLabel(athlete.year)} - {genderLabel(athlete.gender)} - {athlete.className || '-'}
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 shrink-0">
@@ -800,7 +802,7 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                                     <div className="min-w-0">
                                       <div className="truncate text-sm font-black text-gray-900">{award.eventName}</div>
                                       <div className="text-[11px] font-bold text-gray-500">
-                                        Tahun {award.year} - {genderLabel(award.gender)} - Tempat ke-{award.position}
+                                        {formatCompetitionGroupLabel(award.year)} - {genderLabel(award.gender)} - Tempat ke-{award.position}
                                       </div>
                                     </div>
                                     <div className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-black shrink-0"
@@ -899,8 +901,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
                     </thead>
                     <tbody>
                       {[
-                        {label:'Tahap 1 — Tahun 1, 2, 3',emoji:'📋',filter:(r:any)=>r.year>=1&&r.year<=3,color:'#3b82f6',bg:'#eff6ff'},
-                        {label:'Tahap 2 — Tahun 4, 5, 6',emoji:'📋',filter:(r:any)=>r.year>=4&&r.year<=6,color:'#8b5cf6',bg:'#f5f3ff'},
+                        {label:'Kategori Bawah 8',emoji:'📋',filter:(r:any)=>r.year===8,color:'#3b82f6',bg:'#eff6ff'},
+                        {label:'Kategori Bawah 10 & 12',emoji:'📋',filter:(r:any)=>[10,12].includes(r.year),color:'#8b5cf6',bg:'#f5f3ff'},
                         {label:'Acara Terbuka / Khas',   emoji:'🏆',filter:(r:any)=>r.year===0,          color:'#f59e0b',bg:'#fffbeb'},
                       ].map(group=>{
                         const groupRows=filteredMatrix.filter(group.filter);

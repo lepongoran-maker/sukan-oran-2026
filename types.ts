@@ -124,6 +124,7 @@ export interface SystemConfig {
   houses: HouseSettings[];
   events: EventSettings[];
   scoring?: ScoringConfig;
+  competitionDateTime?: string;
 }
 
 export interface AccessConfig {

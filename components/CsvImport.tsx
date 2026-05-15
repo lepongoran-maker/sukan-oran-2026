@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Download, Info, ArrowRight, RefreshCw } from 'lucide-react';
 import { HouseColor, Gender, Participant, EventLimitsConfig, EventType, SystemConfig, StudentRosterEntry } from '../types';
 import { DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
+import { activeEvents, activeHouseIds, formatCompetitionGroupLabel, getEventCompetitionGroup, getHouseName } from '../utils/systemConfig';
 
 interface CsvImportProps {
   onBulkRegistration: (newRegistrations: Record<string, Participant[]>) => void;
@@ -305,7 +305,8 @@ const CsvImport: React.FC<CsvImportProps> = ({ onBulkRegistration, onImportStude
 
           const limit = eventLimits?.eventSlots?.[targetEvent.id] ?? targetEvent.maxParticipants;
           
-          const key = `${houseKey}_${year}_${gender}_${targetEvent.id}`;
+          const group = getEventCompetitionGroup(targetEvent);
+          const key = `${houseKey}_${group.key}_${gender}_${targetEvent.id}`;
           if (!newRegistrations[key]) newRegistrations[key] = [];
 
           // Remove the naive limit check here so we can catch overrides in the conflict stage
@@ -590,7 +591,7 @@ const CsvImport: React.FC<CsvImportProps> = ({ onBulkRegistration, onImportStude
                                   <div className="bg-slate-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                                       <div>
                                           <h4 className="font-bold text-slate-800">{c.eventName}</h4>
-                                          <p className="text-xs font-bold text-slate-500">{c.house} - TAHUN {c.year} - {c.gender === 'L' ? 'LELAKI' : 'PEREMPUAN'}</p>
+                                          <p className="text-xs font-bold text-slate-500">{c.house} - {formatCompetitionGroupLabel(c.year).toUpperCase()} - {c.gender === 'L' ? 'LELAKI' : 'PEREMPUAN'}</p>
                                       </div>
                                       <div className={`text-xs font-bold px-3 py-1 rounded-full ${limitExceeded ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                           Dipilih: {c.participants.filter(p => p.selected).length} / {c.limit} Maksima

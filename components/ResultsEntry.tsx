@@ -1,7 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { HouseColor, Gender, EventType, Participant, WinnerProfile, PointsConfig, HouseStats, SystemConfig } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
+import {
+  activeEvents,
+  activeHouseIds,
+  formatCompetitionGroupLabel,
+  getEventCompetitionGroup,
+  getEventGenders,
+  getHouseName,
+} from '../utils/systemConfig';
 import { Save, Search, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Flag, Calculator, Dumbbell, RotateCcw, Table, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -53,11 +60,9 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
   const allRaces = useMemo(() => {
     const races: RaceDefinition[] = [];
     activeEvents(systemConfig).forEach(event => {
-      event.years.forEach(year => {
-        const genders = year === 0 ? [Gender.CAMPURAN] : [Gender.LELAKI, Gender.PEREMPUAN];
-        genders.forEach(gender => {
-          races.push({ uniqueKey: `${event.id}_${year}_${gender}`, eventId: event.id, eventName: event.name, year, gender, type: event.type });
-        });
+      const group = getEventCompetitionGroup(event);
+      getEventGenders(event).forEach(gender => {
+        races.push({ uniqueKey: `${event.id}_${group.key}_${gender}`, eventId: event.id, eventName: event.name, year: group.key, gender, type: event.type });
       });
     });
     return races;
@@ -68,15 +73,15 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
   const filteredRaces = useMemo(() => {
     return allRaces.filter(race => {
       const isKhas = race.type === EventType.KHUSUS;
-      if (filterCategory==='TAHAP 1') { if (race.eventName.includes('Tahap 2')) return false; if (!isKhas && race.year>3) return false; }
-      if (filterCategory==='TAHAP 2') { if (race.eventName.includes('Tahap 1')) return false; if (!isKhas && race.year<=3) return false; }
+      if (filterCategory==='TAHAP 1') { if (race.eventName.includes('Tahap 2')) return false; if (!isKhas && ![1,2,3,8].includes(race.year)) return false; }
+      if (filterCategory==='TAHAP 2') { if (race.eventName.includes('Tahap 1')) return false; if (!isKhas && ![4,5,6,10,12].includes(race.year)) return false; }
       if (filterYear!=='SEMUA' && race.year!==parseInt(filterYear)) return false;
       if (filterGender!=='SEMUA' && race.gender!==filterGender && race.gender!==Gender.CAMPURAN) return false;
       if (filterEvent!=='SEMUA' && race.eventName!==filterEvent) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const g = race.gender===Gender.LELAKI?'Lelaki':race.gender===Gender.PEREMPUAN?'Perempuan':'Terbuka';
-        const y = race.year===0?'Terbuka':`Tahun ${race.year}`;
+        const y = formatCompetitionGroupLabel(race.year);
         if (!`${race.eventName} ${y} ${g}`.toLowerCase().includes(q)) return false;
       }
       return true;
@@ -109,7 +114,7 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"/>
-              <input type="text" placeholder="Cari... (Contoh: 100m Tahun 4)" className="pl-10 w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
+              <input type="text" placeholder="Cari... (Contoh: 100m Bawah 10)" className="pl-10 w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
             </div>
             <div className="relative">
               <Dumbbell className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none"/>
@@ -124,8 +129,8 @@ const ResultsEntry: React.FC<ResultsEntryProps> = ({ onSaveResult, existingResul
               <option value="TAHAP 2">Tahap 2</option>
             </select>
             <select className="rounded-md border-gray-300 shadow-sm border p-2 bg-white text-sm" value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
-              <option value="SEMUA">Semua Tahun</option>
-              {[1,2,3,4,5,6].map(y=>(<option key={y} value={y}>Tahun {y}</option>))}
+              <option value="SEMUA">Semua Kategori</option>
+              {[8,10,12,0].map(y=>(<option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>))}
             </select>
           </div>
         </div>
@@ -232,7 +237,7 @@ const RaceRow: React.FC<{
               )}
             </h3>
             <p className="text-sm text-gray-500">
-              {race.year === 0 ? 'Kategori Terbuka' : `Tahun ${race.year}`} • 
+              {race.year === 0 ? 'Kategori Terbuka' : formatCompetitionGroupLabel(race.year)} • 
               {race.gender === Gender.LELAKI ? ' Lelaki' : race.gender === Gender.PEREMPUAN ? ' Perempuan' : ' Campuran'}
             </p>
           </div>

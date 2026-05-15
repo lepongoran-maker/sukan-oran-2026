@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { EventType, Gender, HouseColor, HouseStats, PointsConfig, SystemConfig, WinnerProfile } from '../types';
 import { DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, getHouseName } from '../utils/systemConfig';
+import { activeEvents, formatCompetitionGroupLabel, getEventCompetitionGroup, getHouseName } from '../utils/systemConfig';
 import { getPositionScore, isMedalMode, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
 import { generateSportsCommentary } from '../services/geminiService';
 
@@ -56,7 +56,7 @@ interface RecentResult {
   winner: WinnerProfile;
 }
 
-const EVENT_DATE = new Date('2026-05-09T07:00:00');
+const DEFAULT_EVENT_DATE_TIME = DEFAULT_SYSTEM_CONFIG.competitionDateTime || '2026-05-09T07:00';
 
 const HOUSE_THEME: Record<HouseColor, { hex: string; dark: string; glow: string; soft: string; label: string }> = {
   [HouseColor.MERAH]: { hex: '#ff3b45', dark: '#7f111b', glow: '255,59,69', soft: '#ff6b73', label: 'MERAH' },
@@ -73,12 +73,27 @@ const formatGender = (gender: Gender) => {
   return 'Campuran';
 };
 
-const useCountdown = () => {
+const getEventDate = (dateTime?: string) => {
+  const parsed = new Date(dateTime || DEFAULT_EVENT_DATE_TIME);
+  return Number.isNaN(parsed.getTime()) ? new Date(DEFAULT_EVENT_DATE_TIME) : parsed;
+};
+
+const formatEventDateLabel = (dateTime?: string) => {
+  const eventDate = getEventDate(dateTime);
+  return eventDate.toLocaleDateString('ms-MY', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).toUpperCase();
+};
+
+const useCountdown = (dateTime?: string) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, started: false });
 
   useEffect(() => {
+    const eventDate = getEventDate(dateTime);
     const tick = () => {
-      const diff = EVENT_DATE.getTime() - Date.now();
+      const diff = eventDate.getTime() - Date.now();
       if (diff <= 0) {
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, started: true });
         return;
@@ -96,7 +111,7 @@ const useCountdown = () => {
     tick();
     const intervalId = window.setInterval(tick, 1000);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [dateTime]);
 
   return timeLeft;
 };
@@ -107,7 +122,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   pointsConfig,
   systemConfig = DEFAULT_SYSTEM_CONFIG,
 }) => {
-  const countdown = useCountdown();
+  const eventDateLabel = useMemo(() => formatEventDateLabel(systemConfig.competitionDateTime), [systemConfig.competitionDateTime]);
+  const countdown = useCountdown(systemConfig.competitionDateTime);
   const [tickerIndex, setTickerIndex] = useState(0);
   const [commentary, setCommentary] = useState('Siaran keputusan sedang dikemas kini secara langsung.');
   const [spotlightYear, setSpotlightYear] = useState(1);
@@ -117,9 +133,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     const years = new Set<number>();
     events.forEach((event) => {
       if (event.type === EventType.KHUSUS || !shouldScoreEvent(event, systemConfig)) return;
-      event.years.forEach((year) => {
-        if (year > 0) years.add(year);
-      });
+      const group = getEventCompetitionGroup(event);
+      if (group.key > 0) years.add(group.key);
     });
     return Array.from(years).sort((a, b) => a - b);
   }, [events, systemConfig]);
@@ -415,7 +430,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         <div className="desktop-grid mt-5 grid grid-cols-[1.45fr_.9fr] gap-5">
           <div className="space-y-5">
-            <CountdownStrip countdownBlocks={countdownBlocks} />
+            <CountdownStrip countdownBlocks={countdownBlocks} eventDateLabel={eventDateLabel} />
             <CurrentStandings stats={sortedStats} maxPoints={maxPoints} systemConfig={systemConfig} unit={unit} />
             <TrendPanel
               stats={sortedStats.slice(0, 4)}
@@ -553,7 +568,7 @@ const PanelHeader: React.FC<{ icon: React.ReactNode; title: string; action?: str
   </div>
 );
 
-function CountdownStrip({ countdownBlocks }: { countdownBlocks: Array<{ label: string; value: number }> }) {
+function CountdownStrip({ countdownBlocks, eventDateLabel }: { countdownBlocks: Array<{ label: string; value: number }>; eventDateLabel: string }) {
   return (
   <section className="broadcast-panel rounded-[26px] p-4 sm:p-5">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -563,7 +578,7 @@ function CountdownStrip({ countdownBlocks }: { countdownBlocks: Array<{ label: s
         </div>
         <div>
           <div className="text-xl font-black uppercase tracking-wide text-stone-100">Countdown Kejohanan</div>
-          <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">9 Mei 2026 - SK ORAN</div>
+          <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">{eventDateLabel} - SK ORAN</div>
         </div>
       </div>
 
@@ -732,7 +747,7 @@ const TrendPanel: React.FC<{
 
       snapshots.push({
         label: String(snapshots.length + 1),
-        eventName: `${eventDef.name} - ${year > 0 ? `Tahun ${year}` : 'Terbuka'} ${formatGender(gender)}`,
+        eventName: `${eventDef.name} - ${formatCompetitionGroupLabel(year)} ${formatGender(gender)}`,
         values: { ...totals },
       });
     });
@@ -830,7 +845,7 @@ const TrendPanel: React.FC<{
   );
 };
 
-const CountdownCard: React.FC<{ countdownBlocks: Array<{ label: string; value: number }> }> = ({ countdownBlocks }) => (
+const CountdownCard: React.FC<{ countdownBlocks: Array<{ label: string; value: number }>; eventDateLabel: string }> = ({ countdownBlocks, eventDateLabel }) => (
   <section className="broadcast-card rounded-[26px] p-4 sm:p-5">
     <PanelHeader icon={<Timer className="h-7 w-7" />} title="Countdown Kejohanan" />
     <div className="countdown-grid grid grid-cols-4 gap-3 rounded-2xl border border-white/10 bg-black/25 p-3">
@@ -846,7 +861,7 @@ const CountdownCard: React.FC<{ countdownBlocks: Array<{ label: string; value: n
       ))}
     </div>
     <div className="mt-4 text-center text-base font-black uppercase tracking-[0.18em] text-slate-500">
-      9 Mei 2026 - SK ORAN
+      {eventDateLabel} - SK ORAN
     </div>
   </section>
 );
@@ -873,7 +888,7 @@ const TopAthletes: React.FC<{
                 : 'border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:text-slate-300'
             }`}
           >
-            Tahun {year}
+            {formatCompetitionGroupLabel(year)}
           </button>
         ))}
         {availableYears.length === 0 && (
@@ -1044,7 +1059,7 @@ const RecentResults: React.FC<{ results: RecentResult[]; systemConfig: SystemCon
               <div className="min-w-0">
                 <div className="truncate text-lg font-black text-white">{item.eventName}</div>
                 <div className="truncate text-sm text-slate-400">
-                  {item.winner.name || getHouseName(systemConfig, item.winner.house)} - {item.year > 0 ? `Tahun ${item.year}` : 'Terbuka'} {formatGender(item.gender)}
+                  {item.winner.name || getHouseName(systemConfig, item.winner.house)} - {formatCompetitionGroupLabel(item.year)} {formatGender(item.gender)}
                 </div>
               </div>
               <div

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { Participant, HouseColor, Gender, SystemConfig } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
+import { activeEvents, activeHouseIds, formatCompetitionGroupLabel, getHouseName } from '../utils/systemConfig';
 import { Printer, Settings, ChevronDown, ChevronUp, Trophy, Users, AlertCircle, RotateCcw, Eye, Flag } from 'lucide-react';
 
 interface CompetitionFormProps {
@@ -92,7 +92,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
   const GENDER_ORDER = ['L', 'P'];
 
   const getEvRank = (name: string, year: number) => {
-    const list = year <= 3 ? TAHAP1_ORDER : TAHAP2_ORDER;
+    const list = year <= 3 || year === 8 ? TAHAP1_ORDER : TAHAP2_ORDER;
     const i = list.indexOf(name);
     return i >= 0 ? i : 99;
   };
@@ -114,8 +114,8 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
       participants.forEach(p => { if (p?.name?.trim()) groups[gk].participants.push({ name: p.name, className: p.className, house }); });
     });
     return Object.values(groups).sort((a, b) => {
-      const tahapA = a.year <= 3 ? 0 : 1;
-      const tahapB = b.year <= 3 ? 0 : 1;
+      const tahapA = a.year <= 3 || a.year === 8 ? 0 : 1;
+      const tahapB = b.year <= 3 || b.year === 8 ? 0 : 1;
       if (tahapA !== tahapB) return tahapA - tahapB;
       const evA = getEvRank(a.eventName, a.year);
       const evB = getEvRank(b.eventName, b.year);
@@ -264,7 +264,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
     const ori = bulkSelections[g.uniqueKey]?.orientation || 'portrait';
     const isL = ori === 'landscape';
     const gLabel = g.gender === 'L' ? 'LELAKI' : 'PEREMPUAN';
-    const yearLabel = `TAHUN ${g.year}`;
+    const yearLabel = formatCompetitionGroupLabel(g.year).toUpperCase();
 
     const hdrHTML = `
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;border-bottom:3px solid #000;padding-bottom:8px;">
@@ -502,7 +502,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
         </div>
         <div style="display:flex;gap:20px;margin-bottom:8px;font-size:11px;border:1px solid #e2e8f0;background:#f8fafc;padding:5px 10px;border-radius:4px;">
           <span><strong>ACARA:</strong> ${g.eventName.toUpperCase()}</span>
-          <span><strong>KATEGORI:</strong> TAHUN ${g.year} (${gLabel})</span>
+          <span><strong>KATEGORI:</strong> ${formatCompetitionGroupLabel(g.year).toUpperCase()} (${gLabel})</span>
           <span><strong>PERINGKAT:</strong> ${printSettings.peringkat}</span>
         </div>`;
 
@@ -748,7 +748,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
   const printEventInfo = (extra = '') => `
     <div style="display:flex;gap:20px;margin-bottom:8px;font-size:11px;flex-wrap:wrap;border:1px solid #e2e8f0;background:#f8fafc;padding:6px 10px;border-radius:4px;">
       <span><strong>ACARA:</strong> ${selectedGroup?.eventName.toUpperCase()}</span>
-      <span><strong>KATEGORI:</strong> Tahun ${selectedGroup?.year} (${genderLabel})</span>
+      <span><strong>KATEGORI:</strong> ${formatCompetitionGroupLabel(selectedGroup?.year || 0)} (${genderLabel})</span>
       <span><strong>PERINGKAT:</strong> ${printSettings.peringkat}</span>
       ${extra}
     </div>`;
@@ -1076,8 +1076,8 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
             {/* Body scrollable */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {[
-                {label:'TAHAP 1', years:[1,2,3], color:'#3b82f6'},
-                {label:'TAHAP 2', years:[4,5,6], color:'#8b5cf6'},
+                {label:'BAWAH 8', years:[8], color:'#3b82f6'},
+                {label:'BAWAH 10 / 12', years:[10,12], color:'#8b5cf6'},
               ].map(tahap => {
                 const tahapG = groupedData.filter(g => tahap.years.includes(g.year));
                 if (!tahapG.length) return null;
@@ -1105,7 +1105,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
                                     {sel.selected && <svg width="10" height="8" viewBox="0 0 10 8" fill="white"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>}
                                   </button>
                                   <div className="flex-1">
-                                    <span className={`text-sm font-bold ${sel.selected?'text-gray-800':'text-gray-400'}`}>Tahun {g.year} · {gLabel}</span>
+                                    <span className={`text-sm font-bold ${sel.selected?'text-gray-800':'text-gray-400'}`}>{formatCompetitionGroupLabel(g.year)} · {gLabel}</span>
                                     <span className="text-[10px] text-gray-400 ml-2">({g.participants.length} peserta)</span>
                                   </div>
                                   {sel.selected && (
@@ -1184,8 +1184,8 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {[
-                {label:'TAHAP 1', years:[1,2,3], color:'#3b82f6'},
-                {label:'TAHAP 2', years:[4,5,6], color:'#8b5cf6'},
+                {label:'BAWAH 8', years:[8], color:'#3b82f6'},
+                {label:'BAWAH 10 / 12', years:[10,12], color:'#8b5cf6'},
               ].map(tahap => {
                 const tahapG = groupedData.filter(g => tahap.years.includes(g.year));
                 if (!tahapG.length) return null;
@@ -1213,7 +1213,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
                                     {sel.selected && <svg width="10" height="8" viewBox="0 0 10 8" fill="white"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>}
                                   </button>
                                   <div className="flex-1">
-                                    <span className={`text-sm font-bold ${sel.selected?'text-gray-800':'text-gray-400'}`}>Tahun {g.year} · {gLabel}</span>
+                                    <span className={`text-sm font-bold ${sel.selected?'text-gray-800':'text-gray-400'}`}>{formatCompetitionGroupLabel(g.year)} · {gLabel}</span>
                                   </div>
                                   {sel.selected && (
                                     <div className="flex gap-1 flex-shrink-0">
@@ -1293,8 +1293,8 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
         <div className="p-4 space-y-2">
           {/* ── Senarai acara dalam baris ── */}
           {[
-            { label: 'TAHAP 1', years: [1,2,3], color: '#3b82f6' },
-            { label: 'TAHAP 2', years: [4,5,6], color: '#8b5cf6' },
+            { label: 'BAWAH 8', years: [8], color: '#3b82f6' },
+            { label: 'BAWAH 10 / 12', years: [10,12], color: '#8b5cf6' },
           ].map(tahap => {
             const tahapEvents = groupedData.filter(g => tahap.years.includes(g.year));
             if (tahapEvents.length === 0) return null;
@@ -1334,7 +1334,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
                                   borderColor: isSelected ? tahap.color : '#e5e7eb',
                                   boxShadow: isSelected ? `0 2px 8px ${tahap.color}40` : 'none',
                                 }}>
-                                <span>Thn {g.year}</span>
+                                <span>{formatCompetitionGroupLabel(g.year)}</span>
                                 <span className="opacity-70">·</span>
                                 <span>{gLabel}</span>
                                 <span className="text-[9px] opacity-70">({g.participants.length})</span>
@@ -1360,7 +1360,7 @@ const CompetitionForm: React.FC<CompetitionFormProps> = ({ registrations, system
           {selectedGroup && (
             <div className="flex flex-wrap gap-2 pt-3 mt-1 border-t border-gray-100">
               <span className="px-3 py-1.5 rounded-full text-xs font-black bg-slate-800 text-white">
-                ✅ {selectedGroup.eventName} · Thn {selectedGroup.year} · {selectedGroup.gender==='L'?'Lelaki':'Perempuan'} · {selectedGroup.participants.length} peserta
+                ✅ {selectedGroup.eventName} · {formatCompetitionGroupLabel(selectedGroup.year)} · {selectedGroup.gender==='L'?'Lelaki':'Perempuan'} · {selectedGroup.participants.length} peserta
               </span>
               {state && formType==='larian_individu' && (
                 <span className="px-3 py-1.5 rounded-full text-xs font-black bg-orange-50 text-orange-700 border border-orange-200">⚡ {saringanCount} Saringan</span>

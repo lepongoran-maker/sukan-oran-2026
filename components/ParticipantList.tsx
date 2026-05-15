@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Participant, HouseColor, Gender, SystemConfig } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeEvents, activeHouseIds, getHouseName } from '../utils/systemConfig';
+import { activeEvents, activeHouseIds, formatCompetitionGroupLabel, getHouseName } from '../utils/systemConfig';
 import { Search, Filter, Users, Calendar, LayoutGrid, Dumbbell, Printer, ChevronDown } from 'lucide-react';
 
 interface ParticipantListProps {
@@ -40,7 +40,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
   const [filterEvent, setFilterEvent] = useState<string>('SEMUA');
 
   // Print settings
-  const [printYears, setPrintYears] = useState<number[]>([1,2,3,4,5,6,0]);
+  const [printYears, setPrintYears] = useState<number[]>([8,10,12,0]);
   const [printGenders, setPrintGenders] = useState<string[]>([Gender.LELAKI, Gender.PEREMPUAN, Gender.CAMPURAN]);
   const [printEventsFilter, setPrintEventsFilter] = useState<string[]>([]);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -180,7 +180,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
       </tr>`;
     }).join('');
 
-    const subLabel = `${group.year === 0 ? 'Terbuka' : `Tahun ${group.year}`} &bull; ${group.gender === Gender.LELAKI ? 'Lelaki' : group.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}`;
+    const subLabel = `${formatCompetitionGroupLabel(group.year)} &bull; ${group.gender === Gender.LELAKI ? 'Lelaki' : group.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}`;
     const displayTitle = titleOverride || group.eventName;
     const groupHeader = showSubTitle ? `
       <div style="background:#f1f5f9;padding:6px 12px;border-left:3px solid #3b82f6;">
@@ -225,7 +225,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
     const pages: Page[] = [];
 
     sourceGroups.forEach(g => {
-      const sub = `${g.year === 0 ? 'Terbuka' : `Tahun ${g.year}`} \u2022 ${g.gender === Gender.LELAKI ? 'Lelaki' : g.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}`;
+      const sub = `${formatCompetitionGroupLabel(g.year)} \u2022 ${g.gender === Gender.LELAKI ? 'Lelaki' : g.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}`;
       pages.push({ title: g.eventName, subtitle: sub, groups: [g], showSub: false });
     });
 
@@ -329,8 +329,8 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
             <div className="relative">
               <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
               <select className="pl-10 w-full bg-slate-700 text-white text-sm border-slate-600 rounded p-2 appearance-none" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                <option value="SEMUA">Semua Tahun</option>
-                {[1,2,3,4,5,6].map(y => <option key={y} value={y}>Tahun {y}</option>)}
+                <option value="SEMUA">Semua Kategori</option>
+                {[8,10,12,0].map(y => <option key={y} value={y}>{formatCompetitionGroupLabel(y)}</option>)}
               </select>
             </div>
             <div className="relative">
@@ -366,7 +366,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">{group.eventName}</h3>
                       <div className="text-sm text-gray-500 font-medium uppercase tracking-wide mt-1">
-                        {group.year === 0 ? 'Terbuka' : `Tahun ${group.year}`} • {group.gender === Gender.LELAKI ? 'Lelaki' : group.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}
+                        {formatCompetitionGroupLabel(group.year)} • {group.gender === Gender.LELAKI ? 'Lelaki' : group.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Campuran'}
                       </div>
                     </div>
                     <span className="bg-white border border-gray-300 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">{group.participants.length} Peserta</span>
@@ -451,13 +451,13 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">📅 TAHUN</label>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setPrintYears([1,2,3,4,5,6,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
+                      <button type="button" onClick={() => setPrintYears([8,10,12,0])} className="text-[10px] text-blue-600 font-bold hover:underline">Pilih Semua</button>
                       <span className="text-gray-300 text-[10px]">|</span>
                       <button type="button" onClick={() => setPrintYears([])} className="text-[10px] text-red-600 font-bold hover:underline">Kosongkan</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {[1,2,3,4,5,6,0].map(y => (
+                    {[8,10,12,0].map(y => (
                       <label key={y} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 cursor-pointer rounded-lg transition-colors border border-gray-100 hover:border-gray-200 shadow-sm bg-white">
                         <input 
                           type="checkbox"
@@ -468,7 +468,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({ registrations, system
                           }}
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
                         />
-                        <span className="text-xs font-bold text-gray-700 leading-tight">{y===0?'Terbuka':`Tahun ${y}`}</span>
+                        <span className="text-xs font-bold text-gray-700 leading-tight">{formatCompetitionGroupLabel(y)}</span>
                       </label>
                     ))}
                   </div>

@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { HouseColor, Gender, EventType, Participant, EventLimitsConfig, SystemConfig, StudentRosterEntry } from '../types';
 import { HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG } from '../constants';
-import { activeHouses, eventsForYear, getHouseUi } from '../utils/systemConfig';
+import {
+  CompetitionGroup,
+  activeEvents,
+  activeHouses,
+  eventMatchesGender,
+  formatCompetitionGroupLabel,
+  getEventCompetitionGroup,
+  getHouseUi,
+} from '../utils/systemConfig';
 
 interface RegistrationFormProps {
   registrations: Record<string, Participant[]>; // Key: House_Year_Gender_EventId
@@ -15,14 +23,26 @@ interface RegistrationFormProps {
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, studentRoster = [], allowedHouse, onUpdateRegistration, eventLimits, systemConfig = DEFAULT_SYSTEM_CONFIG }) => {
   const houses = activeHouses(systemConfig).filter(house => !allowedHouse || house.id === allowedHouse);
   const [selectedHouse, setSelectedHouse] = useState<HouseColor>(allowedHouse || HouseColor.MERAH);
-  const [selectedYear, setSelectedYear] = useState<number>(1);
+  const [selectedGroupKey, setSelectedGroupKey] = useState<number>(8);
   const [selectedGender, setSelectedGender] = useState<Gender>(Gender.LELAKI);
-  const availableYears = React.useMemo(
-    () => [1, 2, 3, 4, 5, 6].filter(year =>
-      eventsForYear(systemConfig, year).some(evt => evt.type !== EventType.KHUSUS)
-    ),
-    [systemConfig]
-  );
+  const availableGroups = React.useMemo(() => {
+    const groups = new Map<number, CompetitionGroup>();
+    activeEvents(systemConfig)
+      .filter(event => event.type !== EventType.KHUSUS)
+      .forEach(event => {
+        const group = getEventCompetitionGroup(event);
+        groups.set(group.key, group);
+      });
+
+    const order = [8, 10, 12, 0];
+    return Array.from(groups.values()).sort((a, b) => {
+      const aIndex = order.indexOf(a.key);
+      const bIndex = order.indexOf(b.key);
+      if (aIndex >= 0 || bIndex >= 0) return (aIndex >= 0 ? aIndex : 99) - (bIndex >= 0 ? bIndex : 99);
+      return a.key - b.key;
+    });
+  }, [systemConfig]);
+  const selectedGroup = availableGroups.find(group => group.key === selectedGroupKey) || availableGroups[0];
 
   React.useEffect(() => {
     if (allowedHouse) {
@@ -35,24 +55,27 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, stud
   }, [allowedHouse, houses, selectedHouse]);
 
   React.useEffect(() => {
-    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
-      setSelectedYear(availableYears[0]);
+    if (availableGroups.length > 0 && !availableGroups.some(group => group.key === selectedGroupKey)) {
+      setSelectedGroupKey(availableGroups[0].key);
     }
-  }, [availableYears, selectedYear]);
+  }, [availableGroups, selectedGroupKey]);
 
-  const unfilteredEvents = eventsForYear(systemConfig, selectedYear);
-  const currentEvents = unfilteredEvents.filter(evt => evt.type !== EventType.KHUSUS);
+  const currentEvents = activeEvents(systemConfig).filter(evt =>
+    evt.type !== EventType.KHUSUS &&
+    getEventCompetitionGroup(evt).key === selectedGroup?.key &&
+    eventMatchesGender(evt, selectedGender)
+  );
   const houseConfig = getHouseUi(systemConfig, selectedHouse);
   const rosterOptions = React.useMemo(() => {
     return studentRoster
       .filter(student => student.house === selectedHouse)
-      .filter(student => !student.year || student.year === selectedYear)
+      .filter(student => !student.year || !selectedGroup || selectedGroup.years.includes(student.year))
       .filter(student => !student.gender || student.gender === selectedGender)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [selectedGender, selectedHouse, selectedYear, studentRoster]);
+  }, [selectedGender, selectedGroup, selectedHouse, studentRoster]);
 
   // Helper to generate unique key for storage
-  const getKey = (eventId: string) => `${selectedHouse}_${selectedYear}_${selectedGender}_${eventId}`;
+  const getKey = (eventId: string) => `${selectedHouse}_${selectedGroup?.key || 0}_${selectedGender}_${eventId}`;
 
   const handleParticipantChange = (eventId: string, index: number, field: keyof Participant, value: string) => {
     const key = getKey(eventId);
@@ -148,20 +171,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, stud
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tahun / Kategori</label>
               <div className="flex flex-wrap gap-2">
-                {availableYears.map((year) => (
+                {availableGroups.map((group) => (
                   <button
-                    key={year}
-                    onClick={() => setSelectedYear(year)}
+                    key={group.key}
+                    onClick={() => setSelectedGroupKey(group.key)}
                     className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                      selectedYear === year
+                      selectedGroup?.key === group.key
                         ? 'bg-slate-800 text-white'
                         : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    Tahun {year}
+                    {group.label}
                   </button>
                 ))}
-                {availableYears.length === 0 && (
+                {availableGroups.length === 0 && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700">
                     Tiada acara aktif
                   </div>
@@ -194,9 +217,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ registrations, stud
         <div className="p-4 sm:p-6">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-slate-700">
-              Senarai Acara: Tahun {selectedYear} ({selectedGender === Gender.LELAKI ? 'Lelaki' : 'Perempuan'})
+              Senarai Acara: {formatCompetitionGroupLabel(selectedGroup?.key || 0)} ({selectedGender === Gender.LELAKI ? 'Lelaki' : 'Perempuan'})
             </h3>
-            <p className="text-sm text-gray-500">Masukkan nama peserta dan kelas.</p>
+            <p className="text-sm text-gray-500">
+              {selectedGroup && selectedGroup.years.every(year => year > 0)
+                ? `Gabungan murid ${selectedGroup.years.map(year => `Tahun ${year}`).join(' dan ')} ikut rumah sukan.`
+                : 'Masukkan nama peserta dan kelas.'}
+            </p>
           </div>
 
           <div className="space-y-4 md:hidden">

@@ -66,6 +66,7 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     mode: 'POINTS',
     scope: 'ALL_EVENTS',
   },
+  competitionDateTime: '2026-05-09T07:00',
 };
 
 export const DEFAULT_ACCESS_CONFIG: AccessConfig = {
