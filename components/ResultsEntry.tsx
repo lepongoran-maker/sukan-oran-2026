@@ -212,9 +212,15 @@ const RaceRow: React.FC<{
   };
 
   const handleKhususSave = () => {
-    const positions: WinnerProfile[] = Object.entries(houseScores).map(([houseStr, score]) => ({
-      house: houseStr as HouseColor, name: `Rumah ${getHouseName(systemConfig, houseStr)}`, className: 'Acara Khas', customScore: Number(score)
-    }));
+    const positions: WinnerProfile[] = Object.entries(houseScores)
+      .map(([houseStr, score]) => ({
+        house: houseStr as HouseColor,
+        name: `Rumah ${getHouseName(systemConfig, houseStr)}`,
+        className: 'Acara Khas',
+        customScore: Number(score),
+      }))
+      .filter(winner => (winner.customScore || 0) > 0)
+      .sort((a, b) => (b.customScore || 0) - (a.customScore || 0));
     onSave(positions);
   };
 

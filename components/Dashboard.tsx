@@ -16,7 +16,7 @@ import {
 import { EventType, Gender, HouseColor, HouseStats, PointsConfig, SystemConfig, WinnerProfile } from '../types';
 import { DEFAULT_SYSTEM_CONFIG } from '../constants';
 import { activeEvents, formatCompetitionGroupLabel, getEventCompetitionGroup, getHouseName } from '../utils/systemConfig';
-import { getPositionScore, isMedalMode, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
+import { getPositionScore, isCurrentResultKey, isMedalMode, normalizeResultPositions, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
 import { generateSportsCommentary } from '../services/geminiService';
 
 interface DashboardProps {
@@ -148,32 +148,34 @@ const Dashboard: React.FC<DashboardProps> = ({
   const medalMode = isMedalMode(systemConfig);
   const completedEvents = resultEntries.filter(([key, positions]) => {
     const parts = key.split('_');
-    parts.pop();
-    parts.pop();
+    const gender = parts.pop() as Gender;
+    const year = Number(parts.pop());
     const eventDef = events.find((event) => event.id === parts.join('_'));
-    return positions.length > 0 && shouldScoreEvent(eventDef, systemConfig);
+    return isCurrentResultKey(eventDef, year, gender) && normalizeResultPositions(eventDef, positions).length > 0 && shouldScoreEvent(eventDef, systemConfig);
   }).length;
 
   const recentResults = useMemo<RecentResult[]>(() => {
     return resultEntries
-      .filter(([, positions]) => positions.length > 0)
-      .slice(-5)
-      .reverse()
       .map(([key, positions]) => {
         const parts = key.split('_');
         const gender = parts.pop() as Gender;
         const yearText = parts.pop() || '0';
         const eventId = parts.join('_');
         const eventDef = events.find((event) => event.id === eventId);
+        if (!isCurrentResultKey(eventDef, Number(yearText), gender)) return null;
+        const displayPositions = normalizeResultPositions(eventDef, positions);
 
         return {
           key,
           eventName: eventDef?.name || eventId,
           year: Number(yearText),
           gender,
-          winner: positions[0],
+          winner: displayPositions[0],
         };
-      });
+      })
+      .filter((item): item is RecentResult => Boolean(item?.winner))
+      .slice(-5)
+      .reverse();
   }, [events, resultEntries]);
 
   const athleteStandings = useMemo(() => {
@@ -186,9 +188,9 @@ const Dashboard: React.FC<DashboardProps> = ({
       const year = Number(yearText);
       const eventId = parts.join('_');
       const eventDef = events.find((event) => event.id === eventId);
-      if (!eventDef || !yearText || !year || !gender || eventDef.type === EventType.KHUSUS || !shouldScoreEvent(eventDef, systemConfig)) return;
+      if (!eventDef || !yearText || !year || !gender || !isCurrentResultKey(eventDef, year, gender) || eventDef.type === EventType.KHUSUS || !shouldScoreEvent(eventDef, systemConfig)) return;
 
-      positions.forEach((winner, index) => {
+      normalizeResultPositions(eventDef, positions).forEach((winner, index) => {
         if (!winner) return;
         if (index > 2) return;
         const score = getPositionScore(eventDef, winner, index, pointsConfig, systemConfig);
@@ -738,9 +740,9 @@ const TrendPanel: React.FC<{
       const year = Number(yearText);
       const eventId = parts.join('_');
       const eventDef = events.find((event) => event.id === eventId);
-      if (!eventDef || !positions.length || !shouldScoreEvent(eventDef, systemConfig)) return;
+      if (!eventDef || !positions.length || !isCurrentResultKey(eventDef, year, gender) || !shouldScoreEvent(eventDef, systemConfig)) return;
 
-      positions.forEach((winner, index) => {
+      normalizeResultPositions(eventDef, positions).forEach((winner, index) => {
         if (!winner?.house || totals[winner.house] === undefined) return;
         totals[winner.house] += getPositionScore(eventDef, winner, index, pointsConfig, systemConfig);
       });

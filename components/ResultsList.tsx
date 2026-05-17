@@ -9,7 +9,7 @@ import {
   getEventGenders,
   getHouseName,
 } from '../utils/systemConfig';
-import { getPositionScore, scoreTitle, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
+import { getPositionScore, normalizeResultPositions, scoreTitle, scoreUnit, shouldScoreEvent, sortHouseStats } from '../utils/scoring';
 import { Trophy, Search, AlertCircle, User, Users, Flag, Star, Calendar, Dumbbell, Filter, ChevronDown, ChevronUp, ClipboardList, CheckCircle, Zap, Printer, Medal as MedalIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -110,7 +110,8 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     });
     defs.forEach(def => {
       const key = `${def.id}_${def.year}_${def.gender}`;
-      const pos = results[key] || [];
+      const rawPositions = results[key] || [];
+      const pos = normalizeResultPositions(def, rawPositions);
       const rp = activeHouseIds(systemConfig).reduce((acc, house) => ({ ...acc, [house]: 0 }), {} as Record<HouseColor, number>);
       const isScored = shouldScoreEvent(def, systemConfig);
       if (pointsConfig && isScored) {
@@ -150,11 +151,10 @@ const ResultsList: React.FC<ResultsListProps> = ({ results, stats = [], pointsCo
     const events: Array<{key:string;name:string;year:number;gender:Gender;positions:WinnerProfile[];eventDef:any;isManualScore:boolean;hasResults:boolean}> = [];
     const addEvent = (eventDef: any, year: number, gender: Gender) => {
       const key = `${eventDef.id}_${year}_${gender}`;
-      const positions = results[key] || [];
+      const rawPositions = results[key] || [];
+      const positions = normalizeResultPositions(eventDef, rawPositions);
       const isManualScore = eventDef.type === EventType.KHUSUS && eventDef.id !== 'khas_tariktali';
-      let displayPositions = [...positions];
-      if (isManualScore) displayPositions = displayPositions.sort((a,b)=>(b.customScore||0)-(a.customScore||0));
-      events.push({ key, name:eventDef.name, year, gender, positions:displayPositions, eventDef, isManualScore, hasResults:positions.length>0 });
+      events.push({ key, name:eventDef.name, year, gender, positions, eventDef, isManualScore, hasResults:positions.length>0 });
     };
     activeEvents(systemConfig).forEach(e => {
       const group = getEventCompetitionGroup(e);

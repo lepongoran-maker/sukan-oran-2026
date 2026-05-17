@@ -1,5 +1,5 @@
-import { EventDefinition, EventType, HouseColor, HouseStats, PointsConfig, ScoringConfig, SystemConfig, WinnerProfile } from '../types';
-import { activeHouseIds, eventById, normalizeSystemConfig } from './systemConfig';
+import { EventDefinition, EventType, Gender, HouseColor, HouseStats, PointsConfig, ScoringConfig, SystemConfig, WinnerProfile } from '../types';
+import { activeHouseIds, eventById, getEventCompetitionGroup, getEventGenders, normalizeSystemConfig } from './systemConfig';
 
 export const getScoringConfig = (systemConfig: SystemConfig): Required<ScoringConfig> =>
   normalizeSystemConfig(systemConfig).scoring || { mode: 'POINTS', scope: 'ALL_EVENTS' };
@@ -17,6 +17,31 @@ export const shouldScoreEvent = (eventDef: EventDefinition | undefined, systemCo
   return eventDef.type === EventType.INDIVIDU || eventDef.type === EventType.RELAY;
 };
 
+const isManualScoreEvent = (eventDef: EventDefinition) =>
+  eventDef.type === EventType.KHUSUS && eventDef.id !== 'khas_tariktali';
+
+export const normalizeResultPositions = (
+  eventDef: EventDefinition | undefined,
+  positions: WinnerProfile[] = []
+): WinnerProfile[] => {
+  if (!eventDef || !Array.isArray(positions)) return [];
+  if (!isManualScoreEvent(eventDef)) return positions.filter(Boolean);
+
+  return positions
+    .filter((winner) => winner?.house && Number(winner.customScore || 0) > 0)
+    .sort((a, b) => Number(b.customScore || 0) - Number(a.customScore || 0));
+};
+
+export const isCurrentResultKey = (
+  eventDef: EventDefinition | undefined,
+  year: number,
+  gender: Gender,
+): boolean => {
+  if (!eventDef || Number.isNaN(year)) return false;
+  const group = getEventCompetitionGroup(eventDef);
+  return group.key === year && getEventGenders(eventDef).includes(gender);
+};
+
 export const getPositionScore = (
   eventDef: EventDefinition,
   winner: WinnerProfile,
@@ -27,10 +52,11 @@ export const getPositionScore = (
   if (!shouldScoreEvent(eventDef, systemConfig)) return 0;
 
   if (isMedalMode(systemConfig)) {
+    if (isManualScoreEvent(eventDef) && Number(winner.customScore || 0) <= 0) return 0;
     return index <= 2 ? 1 : 0;
   }
 
-  if (eventDef.type === EventType.KHUSUS && eventDef.id !== 'khas_tariktali') {
+  if (isManualScoreEvent(eventDef)) {
     return winner.customScore || 0;
   }
 
@@ -74,11 +100,12 @@ export const calculateHouseStats = (
     const parts = key.split('_');
     const yearStr = parts[parts.length - 2];
     const year = parseInt(yearStr);
+    const gender = parts[parts.length - 1] as Gender;
     const eventId = parts.slice(0, parts.length - 2).join('_');
     const eventDef = eventById(systemConfig, eventId);
-    if (!eventDef || !shouldScoreEvent(eventDef, systemConfig) || !Array.isArray(positions)) return;
+    if (!eventDef || !isCurrentResultKey(eventDef, year, gender) || !shouldScoreEvent(eventDef, systemConfig) || !Array.isArray(positions)) return;
 
-    positions.forEach((winner, index) => {
+    normalizeResultPositions(eventDef, positions).forEach((winner, index) => {
       const house = winner?.house;
       if (!house || !initialStats[house]) return;
 

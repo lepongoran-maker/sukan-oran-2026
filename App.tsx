@@ -13,8 +13,8 @@ import {
 import { 
   DEFAULT_ACCESS_CONFIG, DEFAULT_SYSTEM_CONFIG, POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI
 } from './constants';
-import { activeEvents, activeHouseIds, getHouseName, normalizeSystemConfig } from './utils/systemConfig';
-import { calculateHouseStats } from './utils/scoring';
+import { activeEvents, activeHouseIds, eventById, getHouseName, normalizeSystemConfig } from './utils/systemConfig';
+import { calculateHouseStats, normalizeResultPositions } from './utils/scoring';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -197,7 +197,9 @@ function App() {
 
   const handleSaveResult = async (eventId: string, year: number, gender: Gender, positions: WinnerProfile[]) => {
     const key = `${eventId}_${year}_${gender}`;
-    const newRes = { ...results, [key]: positions };
+    const eventDef = eventById(systemConfig, eventId);
+    const cleanedPositions = normalizeResultPositions(eventDef, positions);
+    const newRes = { ...results, [key]: cleanedPositions };
     setResults(newRes);
     try { await setDoc(doc(db, 'appData', 'results'), { data: newRes }); }
     catch (error) { console.error("Error saving results:", error); }
