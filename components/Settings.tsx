@@ -1034,7 +1034,7 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {activeSubTab==='registration'  && <div className="animate-fadeIn"><RegistrationForm registrations={registrations} studentRoster={studentRoster} allowedHouse={teacherHouse} onUpdateRegistration={onUpdateRegistration} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
           {isAdminSession && activeSubTab==='import'        && <div className="animate-fadeIn"><CsvImport existingRegistrations={registrations} studentRoster={studentRoster} onImportStudentRoster={onImportStudentRoster} onBulkRegistration={onBulkRegistration} onBulkOverride={onBulkOverride} eventLimits={eventLimits} systemConfig={systemConfig}/></div>}
           {isAdminSession && activeSubTab==='results_entry' && <div className="animate-fadeIn"><ResultsEntry existingResults={results} registrations={registrations} onSaveResult={onSaveResult} stats={stats} pointsConfig={pointsConfig} systemConfig={systemConfig}/></div>}
@@ -1392,26 +1392,26 @@ const Settings: React.FC<SettingsProps> = ({
                 <p className="text-sm text-gray-500">Tambah murid baru, tetapkan rumah sukan, dan buang murid yang sudah pindah sekolah.</p>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr]">
-                <div className="border-b border-gray-200 bg-white p-6 xl:border-b-0 xl:border-r">
-                  <div className="mb-5 flex items-center gap-3">
-                    <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
-                      <UserPlus className="h-6 w-6" />
+              <div className="grid min-w-0 grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)]">
+                <div className="border-b border-gray-200 bg-white p-4 xl:border-b-0 xl:border-r">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-100 p-2.5 text-blue-700">
+                      <UserPlus className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-black text-gray-900">Tambah Murid Baru</h3>
-                      <p className="text-sm text-gray-500">Nama ini akan muncul dalam dropdown pendaftaran manual.</p>
+                      <h3 className="text-base font-black text-gray-900">Tambah Murid Baru</h3>
+                      <p className="text-xs text-gray-500">Nama ini akan muncul dalam dropdown pendaftaran manual.</p>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div>
                       <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Nama Murid</label>
                       <input
                         value={studentForm.name}
                         onChange={e=>setStudentForm(prev=>({...prev, name:e.target.value}))}
                         placeholder="Contoh: Ali Bin Abu"
-                        className="w-full rounded-lg border border-gray-300 p-3 font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       />
                     </div>
                     <div>
@@ -1420,7 +1420,7 @@ const Settings: React.FC<SettingsProps> = ({
                         value={studentForm.className}
                         onChange={e=>setStudentForm(prev=>({...prev, className:e.target.value}))}
                         placeholder="Contoh: 4 Rajin"
-                        className="w-full rounded-lg border border-gray-300 p-3 font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       />
                     </div>
                     <div>
@@ -1428,7 +1428,7 @@ const Settings: React.FC<SettingsProps> = ({
                       <select
                         value={studentForm.house}
                         onChange={e=>setStudentForm(prev=>({...prev, house:e.target.value as HouseColor}))}
-                        className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       >
                         {activeStudentHouses.map(house => (
                           <option key={house} value={house}>{getHouseName(systemConfig, house)}</option>
@@ -1441,7 +1441,7 @@ const Settings: React.FC<SettingsProps> = ({
                         <select
                           value={studentForm.year}
                           onChange={e=>setStudentForm(prev=>({...prev, year:e.target.value}))}
-                          className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         >
                           <option value="">Semua</option>
                           {[1,2,3,4,5,6].map(year => <option key={year} value={year}>Tahun {year}</option>)}
@@ -1452,7 +1452,7 @@ const Settings: React.FC<SettingsProps> = ({
                         <select
                           value={studentForm.gender}
                           onChange={e=>setStudentForm(prev=>({...prev, gender:e.target.value}))}
-                          className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         >
                           <option value="">Semua</option>
                           <option value={Gender.LELAKI}>Lelaki</option>
@@ -1463,20 +1463,20 @@ const Settings: React.FC<SettingsProps> = ({
                     <button
                       type="button"
                       onClick={handleAddStudent}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 font-black text-white shadow-lg transition-colors hover:bg-slate-800"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-black text-white shadow-lg transition-colors hover:bg-slate-800"
                     >
                       <UserPlus className="h-5 w-5" /> Tambah Murid
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 p-6">
+                <div className="min-w-0 bg-gray-50 p-4">
                   <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h3 className="text-lg font-black text-gray-900">Murid Dalam Senarai</h3>
+                      <h3 className="text-base font-black text-gray-900">Murid Dalam Senarai</h3>
                       <p className="text-sm text-gray-500">{studentRoster.length} murid disimpan dalam sistem.</p>
                     </div>
-                    <div className="relative md:w-80">
+                    <div className="relative w-full md:w-72">
                       <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <input
                         value={studentSearch}
@@ -1487,7 +1487,7 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                   </div>
 
-                  <div className="max-h-[620px] overflow-auto rounded-xl border border-gray-200 bg-white">
+                  <div className="max-h-[560px] overflow-auto rounded-xl border border-gray-200 bg-white">
                     {sortedStudentRoster.length === 0 ? (
                       <div className="p-10 text-center text-gray-500">
                         <Users className="mx-auto mb-3 h-10 w-10 opacity-30" />
@@ -1496,14 +1496,14 @@ const Settings: React.FC<SettingsProps> = ({
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {sortedStudentRoster.map(({ student, key }) => (
-                          <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div key={key} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                              <div className="truncate text-base font-black text-gray-900">{student.name}</div>
+                              <div className="truncate text-sm font-black text-gray-900">{student.name}</div>
                               <div className="mt-1 flex flex-wrap gap-2 text-xs font-bold">
-                                <span className={`rounded-full px-2.5 py-1 ${houseColor(student.house)}`}>{getHouseName(systemConfig, student.house)}</span>
-                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{student.className || 'Tiada kelas'}</span>
-                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{student.year ? `Tahun ${student.year}` : 'Semua Tahun'}</span>
-                                <span className="rounded-full bg-purple-50 px-2.5 py-1 text-purple-700">
+                                <span className={`rounded-full px-2 py-0.5 ${houseColor(student.house)}`}>{getHouseName(systemConfig, student.house)}</span>
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{student.className || 'Tiada kelas'}</span>
+                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{student.year ? `Tahun ${student.year}` : 'Semua Tahun'}</span>
+                                <span className="rounded-full bg-purple-50 px-2 py-0.5 text-purple-700">
                                   {student.gender === Gender.LELAKI ? 'Lelaki' : student.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Semua Jantina'}
                                 </span>
                               </div>
@@ -1511,7 +1511,7 @@ const Settings: React.FC<SettingsProps> = ({
                             <button
                               type="button"
                               onClick={()=>handleDeleteStudent(student)}
-                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700 transition-colors hover:bg-red-100"
+                              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700 transition-colors hover:bg-red-100"
                             >
                               <Trash2 className="h-4 w-4" /> Buang
                             </button>
