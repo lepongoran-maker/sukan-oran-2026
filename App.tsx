@@ -175,6 +175,24 @@ function App() {
     catch (error) { console.error("Error saving student roster:", error); }
   };
 
+  const handleUpdateStudentRoster = async (newRoster: StudentRosterEntry[]) => {
+    const cleanedRoster = newRoster
+      .filter(student => student?.name?.trim() && student?.house)
+      .map(student => ({
+        ...student,
+        name: student.name.trim(),
+        className: (student.className || '').trim(),
+      }))
+      .sort((a, b) =>
+        String(a.house).localeCompare(String(b.house)) ||
+        (a.year || 0) - (b.year || 0) ||
+        a.name.localeCompare(b.name)
+      );
+    setStudentRoster(cleanedRoster);
+    try { await setDoc(doc(db, 'appData', 'studentRoster'), { data: cleanedRoster }); }
+    catch (error) { console.error("Error saving student roster:", error); }
+  };
+
   const handleUpdateParticipantGlobal = async (oldName: string, newName: string, newClass: string) => {
     const updatedRegs = { ...registrations };
     let hasChanges = false;
@@ -315,6 +333,7 @@ function App() {
             onBulkOverride={handleBulkOverride}
             studentRoster={studentRoster}
             onImportStudentRoster={handleImportStudentRoster}
+            onUpdateStudentRoster={handleUpdateStudentRoster}
             results={results}
             onSaveResult={handleSaveResult}
             onResetData={handleResetData}

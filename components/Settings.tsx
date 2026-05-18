@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, RotateCcw, Award, Users, Anchor, ClipboardList, Trophy, LayoutGrid, FileSpreadsheet, Trash2, Database, AlertTriangle, ShieldAlert, Download, Printer, KeyRound, LogOut } from 'lucide-react';
+import { Save, Settings as SettingsIcon, RotateCcw, Award, Users, Anchor, ClipboardList, Trophy, LayoutGrid, FileSpreadsheet, Trash2, Database, AlertTriangle, ShieldAlert, Download, Printer, KeyRound, LogOut, Search, UserPlus } from 'lucide-react';
 import { AccessConfig, AccessSession, PointsConfig, Participant, WinnerProfile, HouseColor, Gender, EventLimitsConfig, EventType, HouseStats, SystemConfig, EventSettings, StudentRosterEntry } from '../types';
 import { POINTS_INDIVIDUAL, POINTS_RELAY, POINTS_TARIK_TALI, HOUSE_CONFIG, DEFAULT_SYSTEM_CONFIG, DEFAULT_ACCESS_CONFIG } from '../constants';
 import {
@@ -32,13 +32,14 @@ interface SettingsProps {
   onBulkOverride?: (newRegistrations: Record<string, Participant[]>) => void;
   studentRoster: StudentRosterEntry[];
   onImportStudentRoster: (newRoster: StudentRosterEntry[]) => void;
+  onUpdateStudentRoster: (newRoster: StudentRosterEntry[]) => void;
   results: Record<string, WinnerProfile[]>;
   onSaveResult: (eventId: string, year: number, gender: Gender, positions: WinnerProfile[]) => void;
   onResetData: (type: 'participants' | 'results' | 'all') => void;
   stats?: HouseStats[];
 }
 
-type AdminTab = 'registration' | 'import' | 'results_entry' | 'competition_form' | 'system_config' | 'config' | 'limits' | 'access' | 'system' | 'backup';
+type AdminTab = 'registration' | 'import' | 'results_entry' | 'competition_form' | 'system_config' | 'student_roster' | 'config' | 'limits' | 'access' | 'system' | 'backup';
 
 // ── EXCEL EXPORT ──────────────────────────────────────────────────────────────
 function exportToExcel(
@@ -477,7 +478,7 @@ function exportToExcel(
 const Settings: React.FC<SettingsProps> = ({
   pointsConfig, onUpdatePoints, eventLimits, onUpdateEventLimits,
   systemConfig, onUpdateSystemConfig, accessConfig, onUpdateAccessConfig, accessSession, onLogout,
-  registrations, onUpdateRegistration, onBulkRegistration, onBulkOverride, studentRoster, onImportStudentRoster,
+  registrations, onUpdateRegistration, onBulkRegistration, onBulkOverride, studentRoster, onImportStudentRoster, onUpdateStudentRoster,
   results, onSaveResult, onResetData, stats
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<AdminTab>('registration');
@@ -524,6 +525,21 @@ const Settings: React.FC<SettingsProps> = ({
   const [isAccessConfigSaved, setIsAccessConfigSaved] = useState(false);
   const isAdminSession = accessSession.role === 'admin';
   const teacherHouse = accessSession.role === 'house_teacher' ? accessSession.house : undefined;
+  const activeStudentHouses = activeHouseIds(systemConfig);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentForm, setStudentForm] = useState<{
+    name: string;
+    className: string;
+    house: HouseColor;
+    year: string;
+    gender: string;
+  }>({
+    name: '',
+    className: '',
+    house: activeStudentHouses[0] || HouseColor.MERAH,
+    year: '',
+    gender: '',
+  });
 
   useEffect(() => {
     setLocalAccessConfig({
@@ -532,6 +548,66 @@ const Settings: React.FC<SettingsProps> = ({
       housePasswords: { ...DEFAULT_ACCESS_CONFIG.housePasswords, ...(accessConfig.housePasswords || {}) },
     });
   }, [accessConfig]);
+
+  useEffect(() => {
+    if (!activeStudentHouses.includes(studentForm.house)) {
+      setStudentForm(prev => ({ ...prev, house: activeStudentHouses[0] || HouseColor.MERAH }));
+    }
+  }, [activeStudentHouses, studentForm.house]);
+
+  const getStudentRosterKey = (student: StudentRosterEntry) =>
+    `${student.house}_${student.year || 'ALL'}_${student.gender || 'ALL'}_${student.name.trim().toLowerCase()}_${(student.className || '').trim().toLowerCase()}`;
+
+  const sortedStudentRoster = React.useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    return studentRoster
+      .map((student, index) => ({ student, key: `${getStudentRosterKey(student)}_${index}` }))
+      .filter(({ student }) => {
+        if (!query) return true;
+        return `${student.name} ${student.className} ${getHouseName(systemConfig, student.house)} Tahun ${student.year || ''}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) =>
+        getHouseName(systemConfig, a.student.house).localeCompare(getHouseName(systemConfig, b.student.house)) ||
+        (a.student.year || 0) - (b.student.year || 0) ||
+        a.student.name.localeCompare(b.student.name)
+      );
+  }, [studentRoster, studentSearch, systemConfig]);
+
+  const handleAddStudent = () => {
+    const name = studentForm.name.trim();
+    const className = studentForm.className.trim();
+    if (!name) {
+      alert('Sila masukkan nama murid.');
+      return;
+    }
+    if (!studentForm.house) {
+      alert('Sila pilih rumah sukan.');
+      return;
+    }
+
+    const newStudent: StudentRosterEntry = {
+      name,
+      className,
+      house: studentForm.house,
+      ...(studentForm.year ? { year: Number(studentForm.year) } : {}),
+      ...(studentForm.gender ? { gender: studentForm.gender as Gender } : {}),
+    };
+    const newKey = getStudentRosterKey(newStudent);
+    if (studentRoster.some(student => getStudentRosterKey(student) === newKey)) {
+      alert('Murid ini sudah ada dalam senarai rumah sukan.');
+      return;
+    }
+
+    onUpdateStudentRoster([...studentRoster, newStudent]);
+    setStudentForm(prev => ({ ...prev, name: '', className: '' }));
+  };
+
+  const handleDeleteStudent = (target: StudentRosterEntry) => {
+    const ok = confirm(`Padam ${target.name} daripada senarai murid rumah ${getHouseName(systemConfig, target.house)}?\n\nMurid ini tidak akan muncul lagi dalam dropdown pendaftaran manual.`);
+    if (!ok) return;
+    const targetKey = getStudentRosterKey(target);
+    onUpdateStudentRoster(studentRoster.filter(student => getStudentRosterKey(student) !== targetKey));
+  };
 
   useEffect(() => {
     if (!isAdminSession && activeSubTab !== 'registration') {
@@ -891,6 +967,7 @@ const Settings: React.FC<SettingsProps> = ({
 
   const setupTabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
     { id:'system_config', icon:<SettingsIcon className="w-4 h-4"/>, label:'Rumah & Acara' },
+    { id:'student_roster', icon:<UserPlus className="w-4 h-4"/>, label:'Senarai Murid' },
     { id:'config', icon:<LayoutGrid className="w-4 h-4"/>, label:'Sistem Mata' },
     { id:'limits', icon:<ShieldAlert className="w-4 h-4"/>, label:'Had Acara Murid' },
     { id:'access', icon:<KeyRound className="w-4 h-4"/>, label:'Akses Guru' },
@@ -965,7 +1042,7 @@ const Settings: React.FC<SettingsProps> = ({
 
           {isSetupTab&&(
             <div className="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm p-2 animate-fadeIn">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
                 {visibleSetupTabs.map(tab=>(
                   <button
                     key={tab.id}
@@ -1302,6 +1379,147 @@ const Settings: React.FC<SettingsProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SENARAI MURID */}
+          {isAdminSession && activeSubTab==='student_roster'&&(
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fadeIn">
+              <div className="p-6 border-b border-gray-200 bg-slate-50">
+                <h2 className="text-xl font-bold text-gray-900">Senarai Murid & Rumah Sukan</h2>
+                <p className="text-sm text-gray-500">Tambah murid baru, tetapkan rumah sukan, dan buang murid yang sudah pindah sekolah.</p>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr]">
+                <div className="border-b border-gray-200 bg-white p-6 xl:border-b-0 xl:border-r">
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
+                      <UserPlus className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-gray-900">Tambah Murid Baru</h3>
+                      <p className="text-sm text-gray-500">Nama ini akan muncul dalam dropdown pendaftaran manual.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Nama Murid</label>
+                      <input
+                        value={studentForm.name}
+                        onChange={e=>setStudentForm(prev=>({...prev, name:e.target.value}))}
+                        placeholder="Contoh: Ali Bin Abu"
+                        className="w-full rounded-lg border border-gray-300 p-3 font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Kelas</label>
+                      <input
+                        value={studentForm.className}
+                        onChange={e=>setStudentForm(prev=>({...prev, className:e.target.value}))}
+                        placeholder="Contoh: 4 Rajin"
+                        className="w-full rounded-lg border border-gray-300 p-3 font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Rumah Sukan</label>
+                      <select
+                        value={studentForm.house}
+                        onChange={e=>setStudentForm(prev=>({...prev, house:e.target.value as HouseColor}))}
+                        className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      >
+                        {activeStudentHouses.map(house => (
+                          <option key={house} value={house}>{getHouseName(systemConfig, house)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Tahun</label>
+                        <select
+                          value={studentForm.year}
+                          onChange={e=>setStudentForm(prev=>({...prev, year:e.target.value}))}
+                          className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        >
+                          <option value="">Semua</option>
+                          {[1,2,3,4,5,6].map(year => <option key={year} value={year}>Tahun {year}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-black uppercase tracking-wide text-gray-500">Jantina</label>
+                        <select
+                          value={studentForm.gender}
+                          onChange={e=>setStudentForm(prev=>({...prev, gender:e.target.value}))}
+                          className="w-full rounded-lg border border-gray-300 bg-white p-3 font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        >
+                          <option value="">Semua</option>
+                          <option value={Gender.LELAKI}>Lelaki</option>
+                          <option value={Gender.PEREMPUAN}>Perempuan</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddStudent}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 font-black text-white shadow-lg transition-colors hover:bg-slate-800"
+                    >
+                      <UserPlus className="h-5 w-5" /> Tambah Murid
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-6">
+                  <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-gray-900">Murid Dalam Senarai</h3>
+                      <p className="text-sm text-gray-500">{studentRoster.length} murid disimpan dalam sistem.</p>
+                    </div>
+                    <div className="relative md:w-80">
+                      <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <input
+                        value={studentSearch}
+                        onChange={e=>setStudentSearch(e.target.value)}
+                        placeholder="Cari nama, kelas atau rumah..."
+                        className="w-full rounded-lg border border-gray-300 bg-white p-2.5 pl-10 text-sm font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-h-[620px] overflow-auto rounded-xl border border-gray-200 bg-white">
+                    {sortedStudentRoster.length === 0 ? (
+                      <div className="p-10 text-center text-gray-500">
+                        <Users className="mx-auto mb-3 h-10 w-10 opacity-30" />
+                        <p className="font-bold">Tiada murid dijumpai.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {sortedStudentRoster.map(({ student, key }) => (
+                          <div key={key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="truncate text-base font-black text-gray-900">{student.name}</div>
+                              <div className="mt-1 flex flex-wrap gap-2 text-xs font-bold">
+                                <span className={`rounded-full px-2.5 py-1 ${houseColor(student.house)}`}>{getHouseName(systemConfig, student.house)}</span>
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{student.className || 'Tiada kelas'}</span>
+                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{student.year ? `Tahun ${student.year}` : 'Semua Tahun'}</span>
+                                <span className="rounded-full bg-purple-50 px-2.5 py-1 text-purple-700">
+                                  {student.gender === Gender.LELAKI ? 'Lelaki' : student.gender === Gender.PEREMPUAN ? 'Perempuan' : 'Semua Jantina'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={()=>handleDeleteStudent(student)}
+                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700 transition-colors hover:bg-red-100"
+                            >
+                              <Trash2 className="h-4 w-4" /> Buang
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
